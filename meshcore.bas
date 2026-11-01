@@ -236,6 +236,7 @@ End Sub
 Sub DoSendChannelMessage
   Local idxStr$
   Local idxVal
+  Local i
   Local msgText$
   Local payload$
   Local frame$
@@ -252,6 +253,20 @@ Sub DoSendChannelMessage
 
   Line Input "Channel number: ", idxStr$
   Print
+
+  If idxStr$ = "" Then
+    Print "Channel selection missing"
+    Print
+    Exit Sub
+  End If
+
+  For i = 1 To Len(idxStr$)
+    If InStr("0123456789", Mid$(idxStr$, i, 1)) = 0 Then
+      Print "Channel selection must be a whole number"
+      Print
+      Exit Sub
+    End If
+  Next i
 
   idxVal = Val(idxStr$)
 
@@ -415,7 +430,7 @@ Sub ShowChannels
   Print "--------"
 
   For i = 1 To channelCount
-    Print i; " - "; channelName$(i)
+    Print i; " - "; channelName$(i); " (radio index "; channelIdx(i); ")"
   Next i
 
   Print
