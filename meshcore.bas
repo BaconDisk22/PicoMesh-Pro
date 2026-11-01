@@ -443,14 +443,12 @@ Sub DoSendChannelMessage
   If codeVal = 0 Then
     Print "Channel message sent"
   ElseIf codeVal = 1 Then
-    Print "Channel send failed"
-    DumpHex frame$
+    Print "Channel send failed (response details suppressed)"
   ElseIf codeVal = 6 Then
     Print "Channel message queued"
-    DumpHex frame$
   Else
     Print "Unexpected response code: "; codeVal
-    DumpHex frame$
+    Print "Response details suppressed"
   End If
 
   Print
