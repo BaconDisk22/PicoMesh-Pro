@@ -578,6 +578,8 @@ Sub DoRestoreLocalChannels
       If Mid$(name$, j, 1) = "|" Then validFile = 0
     Next j
     idxVal = Val(number$)
+    ' Reserve the #public name exclusively for radio index zero.
+    If idxVal <> 0 And name$ = "#public" Then validFile = 0
     ' Keep #public in local position 1; other code relies on that invariant.
     If countVal = 0 And idxVal <> 0 Then validFile = 0
     For i = 1 To countVal
