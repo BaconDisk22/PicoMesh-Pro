@@ -561,8 +561,8 @@ Sub DoAddChannel
     End If
   Next i
 
-  If idxVal < 0 Or idxVal > 255 Then
-    Print "Invalid channel index"
+  If idxVal < 0 Or idxVal >= MAX_CHANNELS Then
+    Print "Invalid radio channel index (0-7)"
     Print
     Exit Sub
   End If
