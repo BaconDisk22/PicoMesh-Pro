@@ -31,6 +31,11 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn("Len(msgText$) > MAX_FRAME_LEN - 7", body)
         self.assertIn("Message too long for local frame limit", body)
 
+    def test_channel_send_does_not_dump_raw_response(self):
+        body = sub("DoSendChannelMessage")
+        self.assertNotIn("DumpHex frame$", body)
+        self.assertIn("Response details suppressed", body)
+
     def test_radio_query_never_dumps_secret(self):
         body = sub("ReadRadioChannelAt")
         self.assertIn("Chr$(31) + Chr$(idxVal)", body)
