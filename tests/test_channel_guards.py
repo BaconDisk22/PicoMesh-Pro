@@ -30,6 +30,16 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn('If name$ = "#public" Then', body)
         self.assertIn('Print "#public is reserved for radio channel 0"', body)
 
+    def test_channel_name_validation_locations_exist(self):
+        manual = sub("DoAddChannel")
+        imported = sub("DoSyncRadioChannels")
+        restored = sub("DoRestoreLocalChannels")
+        exported = sub("DoExportLocalChannels")
+        self.assertIn('name$ = "#public"', manual)
+        self.assertIn("validName = 0", imported)
+        self.assertIn("validFile = 0", restored)
+        self.assertIn('nameChar$ = "_"', exported)
+
     def test_duplicate_channel_indexes_rejected(self):
         body = sub("DoAddChannel")
         self.assertIn("channelIdx(i) = idxVal", body)
