@@ -292,8 +292,12 @@ Sub DoSyncRadioChannels
           validName = 1
           If name$ = "" Then validName = 0
           For j = 1 To Len(name$)
-            If Asc(Mid$(name$, j, 1)) < 32 Then validName = 0
+            If Asc(Mid$(name$, j, 1)) < 32 Or Asc(Mid$(name$, j, 1)) = 127 Then validName = 0
+            If Mid$(name$, j, 1) = "|" Then validName = 0
           Next j
+
+          If idxVal = 0 And name$ <> "#public" Then validName = 0
+          If idxVal <> 0 And name$ = "#public" Then validName = 0
 
           If validName = 1 Then
             found = 0
