@@ -26,6 +26,11 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn('InStr("0123456789", Mid$(idxStr$, i, 1))', body)
         self.assertIn("idxVal < 1 Or idxVal > channelCount", body)
 
+    def test_channel_send_respects_local_frame_bound(self):
+        body = sub("DoSendChannelMessage")
+        self.assertIn("Len(msgText$) > MAX_FRAME_LEN - 7", body)
+        self.assertIn("Message too long for local frame limit", body)
+
     def test_radio_query_never_dumps_secret(self):
         body = sub("ReadRadioChannelAt")
         self.assertIn("Chr$(31) + Chr$(idxVal)", body)
