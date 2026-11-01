@@ -1937,6 +1937,7 @@ Function ReadFrame$(timeoutMs)
   t0 = Timer
   Do While Loc(#1) < payloadLen
     If Timer - t0 > timeoutMs Then
+      FlushInput
       ReadFrame$ = ""
       Exit Function
     End If
