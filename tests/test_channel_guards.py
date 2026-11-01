@@ -53,6 +53,12 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertNotIn("channelKey$(", body)
         self.assertNotIn("channelPrefix$(", body)
 
+    def test_imported_names_reject_controls_and_empty_values(self):
+        body = sub("DoSyncRadioChannels")
+        self.assertIn('If name$ = "" Then validName = 0', body)
+        self.assertIn("Asc(Mid$(name$, j, 1)) < 32", body)
+        self.assertIn("Skipped invalid/empty name", body)
+
     def test_channel_import_requires_explicit_confirmation(self):
         body = sub("DoSyncRadioChannels")
         self.assertIn('confirm$ <> "IMPORT"', body)
