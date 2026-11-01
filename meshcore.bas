@@ -464,7 +464,7 @@ Sub DoSendChannelMessage
   frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
 
   If frame$ = "" Then
-    Print "No response"
+    Print "No response; delivery status unknown (do not retry blindly)"
     Print
     Exit Sub
   End If
