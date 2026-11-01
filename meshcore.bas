@@ -304,6 +304,7 @@ End Sub
 ' Remove a local channel mapping; radio configuration is untouched.
 Sub DoRemoveLocalChannel
   Local choice$
+  Local confirm$
   Local idxVal
   Local i
 
@@ -326,6 +327,15 @@ Sub DoRemoveLocalChannel
   End If
   If channelIdx(idxVal) = 0 Then
     Print "Cannot remove the default public channel"
+    Exit Sub
+  End If
+
+  Print "Remove local mapping: "; channelName$(idxVal)
+  Print "Radio index: "; channelIdx(idxVal)
+  Print "Radio settings will not change"
+  Line Input "Type REMOVE to confirm: ", confirm$
+  If confirm$ <> "REMOVE" Then
+    Print "Cancelled; no changes made"
     Exit Sub
   End If
 
