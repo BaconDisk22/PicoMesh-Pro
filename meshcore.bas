@@ -407,6 +407,15 @@ Sub DoSendChannelMessage
     Exit Sub
   End If
 
+  ' 3 command/header bytes + 4 timestamp bytes precede the text.
+  ' Keep the complete outgoing payload within the local frame bound.
+  If Len(msgText$) > MAX_FRAME_LEN - 7 Then
+    Print "Message too long for local frame limit"
+    Print "Maximum text bytes: "; MAX_FRAME_LEN - 7
+    Print
+    Exit Sub
+  End If
+
   epochVal = Int(DateTimeToUnix(Date$, Time$))
 
   payload$ = ""
