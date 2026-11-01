@@ -125,6 +125,7 @@ Sub ChannelsMenu
     Print "2 - Add channel"
     Print "3 - Send channel message"
     Print "4 - Read radio channel (read-only)"
+    Print "5 - Scan radio channels (read-only)"
     Print "B - Back"
     Print
 
@@ -140,6 +141,8 @@ Sub ChannelsMenu
         DoSendChannelMessage
       Case "4"
         DoReadRadioChannel
+      Case "5"
+        DoScanRadioChannels
       Case "B"
         Exit Do
       Case Else
@@ -150,14 +153,23 @@ Sub ChannelsMenu
 End Sub
 
 ' Query one radio channel without exposing the returned secret.
+' Read-only scan of the initial eight channel slots.
+' Never print returned channel keys.
+Sub DoScanRadioChannels
+  Local idxVal
+  Print "Scanning radio channel slots 0 through 7"
+  For idxVal = 0 To 7
+    Print "------------------------------"
+    ReadRadioChannelAt idxVal
+  Next idxVal
+  Print "Scan finished; no radio settings changed"
+  Print
+End Sub
+
 Sub DoReadRadioChannel
   Local idxStr$
   Local idxVal
   Local i
-  Local frame$
-  Local codeVal
-  Local name$
-  Local b$
 
   Line Input "Radio channel index (0-7): ", idxStr$
   If idxStr$ = "" Then
@@ -175,6 +187,15 @@ Sub DoReadRadioChannel
     Print "Index outside initial 0-7 discovery range"
     Exit Sub
   End If
+  ReadRadioChannelAt idxVal
+End Sub
+
+Sub ReadRadioChannelAt(idxVal)
+  Local i
+  Local frame$
+  Local codeVal
+  Local name$
+  Local b$
 
   SendFrame Chr$(31) + Chr$(idxVal)
   frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
