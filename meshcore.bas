@@ -578,6 +578,8 @@ Sub DoRestoreLocalChannels
       If Mid$(name$, j, 1) = "|" Then validFile = 0
     Next j
     idxVal = Val(number$)
+    ' Keep #public in local position 1; other code relies on that invariant.
+    If countVal = 0 And idxVal <> 0 Then validFile = 0
     For i = 1 To countVal
       If stagedIdx(i) = idxVal Then validFile = 0
     Next i
