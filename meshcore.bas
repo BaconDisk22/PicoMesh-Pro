@@ -129,6 +129,7 @@ Sub ChannelsMenu
     Print "6 - Import radio channel names"
     Print "7 - Remove local channel mapping"
     Print "8 - Export local channel names"
+    Print "9 - Restore local channel names"
     Print "B - Back"
     Print
 
@@ -152,6 +153,8 @@ Sub ChannelsMenu
         DoRemoveLocalChannel
       Case "8"
         DoExportLocalChannels
+      Case "9"
+        DoRestoreLocalChannels
       Case "B"
         Exit Do
       Case Else
@@ -511,6 +514,105 @@ End Sub
 
 ' Export only public metadata; never write channel keys to disk.
 ' This is a manual backup, not automatic persistence or restore.
+' Restore a complete validated metadata-only backup.
+' No private keys are loaded, and no radio settings are written.
+Sub DoRestoreLocalChannels
+  Local confirm$
+  Local line$
+  Local name$
+  Local number$
+  Local separator
+  Local idxVal
+  Local i
+  Local j
+  Local countVal
+  Local validFile
+  Local seenPublic
+  Local stagedName$(MAX_CHANNELS)
+  Local stagedIdx(MAX_CHANNELS)
+
+  If Dir$("CHANNELS.TXT") = "" Then
+    Print "CHANNELS.TXT not found"
+    Exit Sub
+  End If
+
+  Print "Restore local channel names and indexes from CHANNELS.TXT"
+  Print "This replaces your current local channel list"
+  Print "No private keys are loaded; radio settings are unchanged"
+  Line Input "Type RESTORE to continue: ", confirm$
+  If confirm$ <> "RESTORE" Then
+    Print "Restore cancelled"
+    Exit Sub
+  End If
+
+  countVal = 0
+  validFile = 1
+  seenPublic = 0
+  Open "CHANNELS.TXT" For Input As #2
+  If Eof(#2) Then
+    validFile = 0
+  Else
+    Line Input #2, line$
+    If line$ <> "PICOMESH-CHANNELS-V1" Then validFile = 0
+  End If
+
+  Do While validFile = 1 And Not Eof(#2)
+    Line Input #2, line$
+    separator = InStr(line$, "|")
+    If separator < 2 Then
+      validFile = 0
+      Exit Do
+    End If
+    number$ = Left$(line$, separator - 1)
+    name$ = Mid$(line$, separator + 1)
+    If Len(number$) <> 1 Or Len(name$) < 1 Or Len(name$) > 32 Then
+      validFile = 0
+      Exit Do
+    End If
+    If InStr("01234567", number$) = 0 Then
+      validFile = 0
+      Exit Do
+    End If
+    For j = 1 To Len(name$)
+      If Asc(Mid$(name$, j, 1)) < 32 Then validFile = 0
+      If Mid$(name$, j, 1) = "|" Then validFile = 0
+    Next j
+    idxVal = Val(number$)
+    For i = 1 To countVal
+      If stagedIdx(i) = idxVal Then validFile = 0
+    Next i
+    If idxVal = 0 Then
+      seenPublic = 1
+      If name$ <> "#public" Then validFile = 0
+    End If
+    If countVal >= MAX_CHANNELS Then validFile = 0
+    If validFile = 0 Then Exit Do
+    countVal = countVal + 1
+    stagedIdx(countVal) = idxVal
+    stagedName$(countVal) = name$
+  Loop
+  Close #2
+
+  If validFile = 0 Or seenPublic = 0 Then
+    Print "Invalid channel backup; current channels unchanged"
+    Exit Sub
+  End If
+
+  channelCount = countVal
+  For i = 1 To MAX_CHANNELS
+    channelName$(i) = ""
+    channelKey$(i) = ""
+    channelPrefix$(i) = ""
+    channelIdx(i) = 0
+  Next i
+  For i = 1 To countVal
+    channelName$(i) = stagedName$(i)
+    channelIdx(i) = stagedIdx(i)
+  Next i
+  Print "Restored "; channelCount; " local channel mappings"
+  Print "Private keys not restored; radio settings unchanged"
+End Sub
+
 Sub DoExportLocalChannels
   Local confirm$
   Local i
