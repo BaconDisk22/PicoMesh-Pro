@@ -258,6 +258,7 @@ Sub DoAddChannel
   Local name$
   Local idxStr$
   Local idxVal
+  Local i
 
   If channelCount >= MAX_CHANNELS Then
     Print "Channel list full"
@@ -268,6 +269,21 @@ Sub DoAddChannel
   Line Input "Channel name: ", name$
   Line Input "Channel index: ", idxStr$
   Print
+
+  ' Reject blank, non-numeric, and fractional channel indexes.
+  If idxStr$ = "" Then
+    Print "Channel index missing"
+    Print
+    Exit Sub
+  End If
+
+  For i = 1 To Len(idxStr$)
+    If InStr("0123456789", Mid$(idxStr$, i, 1)) = 0 Then
+      Print "Channel index must be a whole number"
+      Print
+      Exit Sub
+    End If
+  Next i
 
   idxVal = Val(idxStr$)
 
@@ -282,6 +298,14 @@ Sub DoAddChannel
     Print
     Exit Sub
   End If
+
+  For i = 1 To channelCount
+    If channelIdx(i) = idxVal Then
+      Print "Channel index already exists"
+      Print
+      Exit Sub
+    End If
+  Next i
 
   channelCount = channelCount + 1
   channelName$(channelCount) = name$
