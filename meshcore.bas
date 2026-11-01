@@ -1923,6 +1923,8 @@ Function ReadFrame$(timeoutMs)
 
   ' Reject invalid lengths
   If payloadLen <= 0 Or payloadLen > MAX_FRAME_LEN Then
+    ' Drain any bytes already buffered from the invalid frame.
+    FlushInput
     ReadFrame$ = ""
     Exit Function
   End If
