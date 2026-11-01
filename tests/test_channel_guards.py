@@ -48,6 +48,11 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertNotIn("channelKey$(", body)
         self.assertNotIn("channelPrefix$(", body)
 
+    def test_channel_import_requires_explicit_confirmation(self):
+        body = sub("DoSyncRadioChannels")
+        self.assertIn('confirm$ <> "IMPORT"', body)
+        self.assertIn("Cancelled; no changes made", body)
+
     def test_local_removal_requires_confirmation_and_protects_public(self):
         body = sub("DoRemoveLocalChannel")
         self.assertIn("channelIdx(idxVal) = 0", body)
