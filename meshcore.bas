@@ -1850,6 +1850,10 @@ End Sub
 
 Sub SendFrame(payload$)
   Local hdr$
+  If Len(payload$) < 1 Or Len(payload$) > MAX_FRAME_LEN Then
+    Print "Invalid outgoing frame length; frame not sent"
+    Exit Sub
+  End If
   hdr$ = Chr$(60) + Chr$(Len(payload$) And &HFF)
   hdr$ = hdr$ + Chr$((Len(payload$) >> 8) And &HFF)
   Print #1, hdr$ + payload$;
