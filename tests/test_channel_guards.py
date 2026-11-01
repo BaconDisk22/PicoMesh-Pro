@@ -16,6 +16,11 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn('channelName$(1) = "#public"', SOURCE)
         self.assertIn("channelIdx(1) = 0", SOURCE)
 
+    def test_local_channel_name_is_bounded_and_printable(self):
+        body = sub("DoAddChannel")
+        self.assertIn("Len(name$) > 32", body)
+        self.assertIn("Asc(Mid$(name$, i, 1)) < 32", body)
+
     def test_duplicate_channel_indexes_rejected(self):
         body = sub("DoAddChannel")
         self.assertIn("channelIdx(i) = idxVal", body)
