@@ -95,6 +95,11 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn('name$ <> "#public"', body)
         self.assertIn("countVal >= MAX_CHANNELS", body)
 
+    def test_restore_requires_public_channel_first(self):
+        body = sub("DoRestoreLocalChannels")
+        self.assertIn("If countVal = 0 And idxVal <> 0 Then validFile = 0", body)
+        self.assertIn('If name$ <> "#public" Then validFile = 0', body)
+
     def test_restore_does_not_write_radio_or_load_keys(self):
         body = sub("DoRestoreLocalChannels")
         self.assertNotIn("SendFrame", body)
