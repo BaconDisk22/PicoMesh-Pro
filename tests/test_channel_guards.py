@@ -68,6 +68,14 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn('confirm$ <> "IMPORT"', body)
         self.assertIn("Cancelled; no changes made", body)
 
+    def test_channel_export_uses_sanitized_copy_and_no_keys(self):
+        body = sub("DoExportLocalChannels")
+        self.assertIn('If nameChar$ = "|" Then nameChar$ = "_"', body)
+        self.assertIn('Trim$(Str$(channelIdx(i)))', body)
+        self.assertNotIn('Mid$(safeName$, j, 1) = "_"', body)
+        self.assertNotIn('channelKey$(', body)
+        self.assertIn('confirm$ <> "EXPORT"', body)
+
     def test_local_removal_requires_confirmation_and_protects_public(self):
         body = sub("DoRemoveLocalChannel")
         self.assertIn("channelIdx(idxVal) = 0", body)
