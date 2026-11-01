@@ -124,6 +124,7 @@ Sub ChannelsMenu
     Print "1 - List channels"
     Print "2 - Add channel"
     Print "3 - Send channel message"
+    Print "4 - Read radio channel (read-only)"
     Print "B - Back"
     Print
 
@@ -137,6 +138,8 @@ Sub ChannelsMenu
         DoAddChannel
       Case "3"
         DoSendChannelMessage
+      Case "4"
+        DoReadRadioChannel
       Case "B"
         Exit Do
       Case Else
@@ -144,6 +147,69 @@ Sub ChannelsMenu
         Print
     End Select
   Loop
+End Sub
+
+' Query one radio channel without exposing the returned secret.
+Sub DoReadRadioChannel
+  Local idxStr$
+  Local idxVal
+  Local i
+  Local frame$
+  Local codeVal
+  Local name$
+  Local b$
+
+  Line Input "Radio channel index (0-7): ", idxStr$
+  If idxStr$ = "" Then
+    Print "Channel index missing"
+    Exit Sub
+  End If
+  For i = 1 To Len(idxStr$)
+    If InStr("0123456789", Mid$(idxStr$, i, 1)) = 0 Then
+      Print "Invalid channel index"
+      Exit Sub
+    End If
+  Next i
+  idxVal = Val(idxStr$)
+  If idxVal < 0 Or idxVal > 7 Then
+    Print "Index outside initial 0-7 discovery range"
+    Exit Sub
+  End If
+
+  SendFrame Chr$(31) + Chr$(idxVal)
+  frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
+  If frame$ = "" Then
+    Print "No channel response"
+    Exit Sub
+  End If
+  codeVal = Asc(Left$(frame$, 1))
+  If codeVal = 1 Then
+    Print "Radio rejected channel query"
+    Exit Sub
+  End If
+  If codeVal <> 18 Then
+    Print "Unexpected channel response code: "; codeVal
+    Exit Sub
+  End If
+  If Len(frame$) < 50 Then
+    Print "Incomplete channel info response"
+    Exit Sub
+  End If
+  If Asc(Mid$(frame$, 2, 1)) <> idxVal Then
+    Print "Channel response index mismatch"
+    Exit Sub
+  End If
+  name$ = ""
+  For i = 3 To 34
+    b$ = Mid$(frame$, i, 1)
+    If b$ = Chr$(0) Then Exit For
+    name$ = name$ + b$
+  Next i
+  Print "Radio channel index: "; idxVal
+  Print "Radio channel name:  "; name$
+  Print "Channel secret:      [redacted]"
+  Print "Read-only query; local channel list unchanged"
+  Print
 End Sub
 
 Sub DoSendChannelMessage
