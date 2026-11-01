@@ -243,6 +243,7 @@ End Sub
 ' This uses the existing channel-info response layout.
 Sub DoSyncRadioChannels
   Local idxVal
+  Local confirm$
   Local frame$
   Local codeVal
   Local name$
@@ -253,8 +254,15 @@ Sub DoSyncRadioChannels
   Local updated
   Local added
 
-  Print "Importing radio channel names (slots 0-7)"
+  Print "Import radio channel names (slots 0-7)"
+  Print "This may replace names in your local channel list"
   Print "Private keys are not copied or displayed"
+  Print "Radio configuration will not be changed"
+  Line Input "Type IMPORT to continue: ", confirm$
+  If confirm$ <> "IMPORT" Then
+    Print "Cancelled; no changes made"
+    Exit Sub
+  End If
   updated = 0
   added = 0
 
