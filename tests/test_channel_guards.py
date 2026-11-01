@@ -101,6 +101,23 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn('channelKey$(i) = ""', body)
         self.assertIn('channelPrefix$(i) = ""', body)
 
+    def test_channel_backup_export_restore_format_agrees(self):
+        exporter = sub("DoExportLocalChannels")
+        restorer = sub("DoRestoreLocalChannels")
+        self.assertIn('Print #2, "PICOMESH-CHANNELS-V1"', exporter)
+        self.assertIn('line$ <> "PICOMESH-CHANNELS-V1"', restorer)
+        self.assertIn('Trim$(Str$(channelIdx(i))); "|"; safeName$', exporter)
+        self.assertIn('separator = InStr(line$, "|")', restorer)
+        self.assertIn('number$ = Left$(line$, separator - 1)', restorer)
+        self.assertIn('name$ = Mid$(line$, separator + 1)', restorer)
+
+    def test_backup_menu_actions_are_wired(self):
+        menu = sub("ChannelsMenu")
+        self.assertIn('Case "8"', menu)
+        self.assertIn("DoExportLocalChannels", menu)
+        self.assertIn('Case "9"', menu)
+        self.assertIn("DoRestoreLocalChannels", menu)
+
     def test_local_removal_requires_confirmation_and_protects_public(self):
         body = sub("DoRemoveLocalChannel")
         self.assertIn("channelIdx(idxVal) = 0", body)
