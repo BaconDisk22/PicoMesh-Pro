@@ -126,6 +126,7 @@ Sub ChannelsMenu
     Print "3 - Send channel message"
     Print "4 - Read radio channel (read-only)"
     Print "5 - Scan radio channels (read-only)"
+    Print "6 - Import radio channel names"
     Print "B - Back"
     Print
 
@@ -143,6 +144,8 @@ Sub ChannelsMenu
         DoReadRadioChannel
       Case "5"
         DoScanRadioChannels
+      Case "6"
+        DoSyncRadioChannels
       Case "B"
         Exit Do
       Case Else
@@ -230,6 +233,68 @@ Sub ReadRadioChannelAt(idxVal)
   Print "Radio channel name:  "; name$
   Print "Channel secret:      [redacted]"
   Print "Read-only query; local channel list unchanged"
+  Print
+End Sub
+
+' Import radio channel names and indexes only; never store secret bytes.
+' This uses the existing channel-info response layout.
+Sub DoSyncRadioChannels
+  Local idxVal
+  Local frame$
+  Local codeVal
+  Local name$
+  Local b$
+  Local i
+  Local j
+  Local found
+  Local updated
+  Local added
+
+  Print "Importing radio channel names (slots 0-7)"
+  Print "Private keys are not copied or displayed"
+  updated = 0
+  added = 0
+
+  For idxVal = 0 To 7
+    SendFrame Chr$(31) + Chr$(idxVal)
+    frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
+    If frame$ <> "" Then
+      codeVal = Asc(Left$(frame$, 1))
+      If codeVal = 18 And Len(frame$) >= 50 Then
+        If Asc(Mid$(frame$, 2, 1)) = idxVal Then
+          name$ = ""
+          For j = 3 To 34
+            b$ = Mid$(frame$, j, 1)
+            If b$ = Chr$(0) Then Exit For
+            name$ = name$ + b$
+          Next j
+
+          If name$ <> "" Then
+            found = 0
+            For i = 1 To channelCount
+              If channelIdx(i) = idxVal Then
+                channelName$(i) = name$
+                found = 1
+                updated = updated + 1
+                Exit For
+              End If
+            Next i
+            If found = 0 And channelCount < MAX_CHANNELS Then
+              channelCount = channelCount + 1
+              channelIdx(channelCount) = idxVal
+              channelName$(channelCount) = name$
+              added = added + 1
+            End If
+          End If
+        End If
+      End If
+    End If
+  Next idxVal
+
+  Print "Updated existing: "; updated
+  Print "Added channels:   "; added
+  Print "Local names only; radio configuration unchanged"
+  Print "Changes are not saved across restarts"
   Print
 End Sub
 
