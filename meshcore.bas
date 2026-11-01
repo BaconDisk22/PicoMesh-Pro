@@ -532,6 +532,22 @@ Sub DoAddChannel
     Exit Sub
   End If
 
+  ' Radio channel names occupy a 32-byte field in the read response.
+  If Len(name$) > 32 Then
+    Print "Channel name too long (maximum 32 bytes)"
+    Print
+    Exit Sub
+  End If
+
+  ' Reject control characters in local display names.
+  For i = 1 To Len(name$)
+    If Asc(Mid$(name$, i, 1)) < 32 Then
+      Print "Channel name contains control characters"
+      Print
+      Exit Sub
+    End If
+  Next i
+
   If idxVal < 0 Or idxVal > 255 Then
     Print "Invalid channel index"
     Print
