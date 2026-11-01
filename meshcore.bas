@@ -128,6 +128,7 @@ Sub ChannelsMenu
     Print "5 - Scan radio channels (read-only)"
     Print "6 - Import radio channel names"
     Print "7 - Remove local channel mapping"
+    Print "8 - Export local channel names"
     Print "B - Back"
     Print
 
@@ -149,6 +150,8 @@ Sub ChannelsMenu
         DoSyncRadioChannels
       Case "7"
         DoRemoveLocalChannel
+      Case "8"
+        DoExportLocalChannels
       Case "B"
         Exit Do
       Case Else
@@ -504,6 +507,39 @@ Sub MessagesMenu
         Print
     End Select
   Loop
+End Sub
+
+' Export only public metadata; never write channel keys to disk.
+' This is a manual backup, not automatic persistence or restore.
+Sub DoExportLocalChannels
+  Local confirm$
+  Local i
+  Local j
+  Local safeName$
+
+  Print "Export local channel names and radio indexes"
+  Print "This overwrites CHANNELS.TXT on the current drive"
+  Print "Private channel keys will not be saved"
+  Line Input "Type EXPORT to continue: ", confirm$
+  If confirm$ <> "EXPORT" Then
+    Print "Export cancelled"
+    Exit Sub
+  End If
+
+  Open "CHANNELS.TXT" For Output As #2
+  Print #2, "PICOMESH-CHANNELS-V1"
+  For i = 1 To channelCount
+    safeName$ = channelName$(i)
+    ' Delimiters and line breaks cannot be represented in this format.
+    For j = 1 To Len(safeName$)
+      If Mid$(safeName$, j, 1) = "|" Then Mid$(safeName$, j, 1) = "_"
+    Next j
+    Print #2, Str$(channelIdx(i)); "|"; safeName$
+  Next i
+  Close #2
+  Print "Exported "; channelCount; " local mappings to CHANNELS.TXT"
+  Print "No keys exported; no automatic restore is implemented"
+  Print
 End Sub
 
 Sub DoAddChannel
