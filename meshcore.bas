@@ -641,7 +641,7 @@ Sub DoExportLocalChannels
     For j = 1 To Len(channelName$(i))
       nameChar$ = Mid$(channelName$(i), j, 1)
       If nameChar$ = "|" Then nameChar$ = "_"
-      If Asc(nameChar$) < 32 Then nameChar$ = "_"
+      If Asc(nameChar$) < 32 Or Asc(nameChar$) = 127 Then nameChar$ = "_"
       safeName$ = safeName$ + nameChar$
     Next j
     Print #2, Trim$(Str$(channelIdx(i))); "|"; safeName$
