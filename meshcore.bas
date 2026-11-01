@@ -253,6 +253,8 @@ Sub DoSyncRadioChannels
   Local found
   Local updated
   Local added
+  Local skipped
+  Local validName
 
   Print "Import radio channel names (slots 0-7)"
   Print "This may replace names in your local channel list"
@@ -265,6 +267,7 @@ Sub DoSyncRadioChannels
   End If
   updated = 0
   added = 0
+  skipped = 0
 
   For idxVal = 0 To 7
     SendFrame Chr$(31) + Chr$(idxVal)
@@ -280,7 +283,13 @@ Sub DoSyncRadioChannels
             name$ = name$ + b$
           Next j
 
-          If name$ <> "" Then
+          validName = 1
+          If name$ = "" Then validName = 0
+          For j = 1 To Len(name$)
+            If Asc(Mid$(name$, j, 1)) < 32 Then validName = 0
+          Next j
+
+          If validName = 1 Then
             found = 0
             For i = 1 To channelCount
               If channelIdx(i) = idxVal Then
@@ -296,6 +305,9 @@ Sub DoSyncRadioChannels
               channelName$(channelCount) = name$
               added = added + 1
             End If
+          Else
+            skipped = skipped + 1
+            Print "Skipped invalid/empty name at slot "; idxVal
           End If
         End If
       End If
@@ -304,6 +316,7 @@ Sub DoSyncRadioChannels
 
   Print "Updated existing: "; updated
   Print "Added channels:   "; added
+  Print "Invalid names skipped: "; skipped
   Print "Local names only; radio configuration unchanged"
   Print "Changes are not saved across restarts"
   Print
