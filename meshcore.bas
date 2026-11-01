@@ -127,6 +127,7 @@ Sub ChannelsMenu
     Print "4 - Read radio channel (read-only)"
     Print "5 - Scan radio channels (read-only)"
     Print "6 - Import radio channel names"
+    Print "7 - Remove local channel mapping"
     Print "B - Back"
     Print
 
@@ -146,6 +147,8 @@ Sub ChannelsMenu
         DoScanRadioChannels
       Case "6"
         DoSyncRadioChannels
+      Case "7"
+        DoRemoveLocalChannel
       Case "B"
         Exit Do
       Case Else
@@ -295,6 +298,50 @@ Sub DoSyncRadioChannels
   Print "Added channels:   "; added
   Print "Local names only; radio configuration unchanged"
   Print "Changes are not saved across restarts"
+  Print
+End Sub
+
+' Remove a local channel mapping; radio configuration is untouched.
+Sub DoRemoveLocalChannel
+  Local choice$
+  Local idxVal
+  Local i
+
+  ShowChannels
+  Line Input "Local channel number to remove: ", choice$
+  If choice$ = "" Then
+    Print "Selection missing"
+    Exit Sub
+  End If
+  For i = 1 To Len(choice$)
+    If InStr("0123456789", Mid$(choice$, i, 1)) = 0 Then
+      Print "Selection must be a whole number"
+      Exit Sub
+    End If
+  Next i
+  idxVal = Val(choice$)
+  If idxVal < 1 Or idxVal > channelCount Then
+    Print "Invalid local channel number"
+    Exit Sub
+  End If
+  If channelIdx(idxVal) = 0 Then
+    Print "Cannot remove the default public channel"
+    Exit Sub
+  End If
+
+  For i = idxVal To channelCount - 1
+    channelName$(i) = channelName$(i + 1)
+    channelIdx(i) = channelIdx(i + 1)
+    channelKey$(i) = channelKey$(i + 1)
+    channelPrefix$(i) = channelPrefix$(i + 1)
+  Next i
+  channelName$(channelCount) = ""
+  channelKey$(channelCount) = ""
+  channelPrefix$(channelCount) = ""
+  channelIdx(channelCount) = 0
+  channelCount = channelCount - 1
+  Print "Local channel removed; radio configuration unchanged"
+  Print "Change is not saved across restarts"
   Print
 End Sub
 
