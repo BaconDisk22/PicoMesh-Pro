@@ -106,16 +106,7 @@ class ChannelGuardTests(unittest.TestCase):
         restorer = sub("DoRestoreLocalChannels")
         self.assertIn('Print #2, "PICOMESH-CHANNELS-V1"', exporter)
         self.assertIn('line$ <> "PICOMESH-CHANNELS-V1"', restorer)
-        self.assertIn('Trim$(Str$(channelIdx(i))); "|"; safeName
-        body = sub("DoRemoveLocalChannel")
-        self.assertIn("channelIdx(idxVal) = 0", body)
-        self.assertIn('confirm$ <> "REMOVE"', body)
-        self.assertIn('channelKey$(channelCount) = ""', body)
-        self.assertIn('channelPrefix$(channelCount) = ""', body)
-
-if __name__ == "__main__":
-    unittest.main()
-, exporter)
+        self.assertIn('Trim$(Str$(channelIdx(i))); "|"; safeName$', exporter)
         self.assertIn('separator = InStr(line$, "|")', restorer)
         self.assertIn('number$ = Left$(line$, separator - 1)', restorer)
         self.assertIn('name$ = Mid$(line$, separator + 1)', restorer)
