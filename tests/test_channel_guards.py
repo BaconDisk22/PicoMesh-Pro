@@ -25,6 +25,11 @@ class ChannelGuardTests(unittest.TestCase):
         body = sub("DoAddChannel")
         self.assertIn("idxVal < 0 Or idxVal >= MAX_CHANNELS", body)
 
+    def test_manual_channel_cannot_reuse_public_name(self):
+        body = sub("DoAddChannel")
+        self.assertIn('If name$ = "#public" Then', body)
+        self.assertIn('Print "#public is reserved for radio channel 0"', body)
+
     def test_duplicate_channel_indexes_rejected(self):
         body = sub("DoAddChannel")
         self.assertIn("channelIdx(i) = idxVal", body)
