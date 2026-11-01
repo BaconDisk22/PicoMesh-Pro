@@ -76,6 +76,31 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertNotIn('channelKey$(', body)
         self.assertIn('confirm$ <> "EXPORT"', body)
 
+    def test_restore_is_confirmation_gated(self):
+        body = sub("DoRestoreLocalChannels")
+        self.assertIn('confirm$ <> "RESTORE"', body)
+        self.assertIn('line$ <> "PICOMESH-CHANNELS-V1"', body)
+
+    def test_restore_stages_before_mutating_live_channels(self):
+        body = sub("DoRestoreLocalChannels")
+        self.assertIn("stagedName$(countVal) = name$", body)
+        self.assertIn("stagedIdx(countVal) = idxVal", body)
+        self.assertLess(body.index("Close #2"), body.index("channelCount = countVal"))
+        self.assertIn("validFile = 0 Or seenPublic = 0", body)
+
+    def test_restore_rejects_duplicates_and_out_of_range_indexes(self):
+        body = sub("DoRestoreLocalChannels")
+        self.assertIn('InStr("01234567", number$) = 0', body)
+        self.assertIn("stagedIdx(i) = idxVal", body)
+        self.assertIn('name$ <> "#public"', body)
+        self.assertIn("countVal >= MAX_CHANNELS", body)
+
+    def test_restore_does_not_write_radio_or_load_keys(self):
+        body = sub("DoRestoreLocalChannels")
+        self.assertNotIn("SendFrame", body)
+        self.assertIn('channelKey$(i) = ""', body)
+        self.assertIn('channelPrefix$(i) = ""', body)
+
     def test_local_removal_requires_confirmation_and_protects_public(self):
         body = sub("DoRemoveLocalChannel")
         self.assertIn("channelIdx(idxVal) = 0", body)
