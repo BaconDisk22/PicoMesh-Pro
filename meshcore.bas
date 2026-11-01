@@ -700,8 +700,8 @@ Sub DoAddChannel
 
   ' Reject control characters in local display names.
   For i = 1 To Len(name$)
-    If Asc(Mid$(name$, i, 1)) < 32 Then
-      Print "Channel name contains control characters"
+    If Asc(Mid$(name$, i, 1)) < 32 Or Asc(Mid$(name$, i, 1)) = 127 Or Mid$(name$, i, 1) = "|" Then
+      Print "Channel name contains invalid characters"
       Print
       Exit Sub
     End If
