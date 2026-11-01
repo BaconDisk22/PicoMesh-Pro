@@ -536,7 +536,7 @@ Sub DoRestoreLocalChannels
   Local stagedIdx(MAX_CHANNELS)
 
   If Dir$("CHANNELS.TXT") = "" Then
-    Print "CHANNELS.TXT not found"
+    Print "CHANNELS.TXT not found; current local channels unchanged"
     Exit Sub
   End If
 
