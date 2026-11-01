@@ -574,7 +574,7 @@ Sub DoRestoreLocalChannels
       Exit Do
     End If
     For j = 1 To Len(name$)
-      If Asc(Mid$(name$, j, 1)) < 32 Then validFile = 0
+      If Asc(Mid$(name$, j, 1)) < 32 Or Asc(Mid$(name$, j, 1)) = 127 Then validFile = 0
       If Mid$(name$, j, 1) = "|" Then validFile = 0
     Next j
     idxVal = Val(number$)
