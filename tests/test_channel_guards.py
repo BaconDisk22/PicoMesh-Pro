@@ -21,6 +21,10 @@ class ChannelGuardTests(unittest.TestCase):
         self.assertIn("Len(name$) > 32", body)
         self.assertIn("Asc(Mid$(name$, i, 1)) < 32", body)
 
+    def test_local_index_matches_supported_radio_slots(self):
+        body = sub("DoAddChannel")
+        self.assertIn("idxVal < 0 Or idxVal >= MAX_CHANNELS", body)
+
     def test_duplicate_channel_indexes_rejected(self):
         body = sub("DoAddChannel")
         self.assertIn("channelIdx(i) = idxVal", body)
