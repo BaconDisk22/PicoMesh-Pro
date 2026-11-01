@@ -516,6 +516,7 @@ Sub DoExportLocalChannels
   Local i
   Local j
   Local safeName$
+  Local nameChar$
 
   Print "Export local channel names and radio indexes"
   Print "This overwrites CHANNELS.TXT on the current drive"
@@ -529,12 +530,15 @@ Sub DoExportLocalChannels
   Open "CHANNELS.TXT" For Output As #2
   Print #2, "PICOMESH-CHANNELS-V1"
   For i = 1 To channelCount
-    safeName$ = channelName$(i)
-    ' Delimiters and line breaks cannot be represented in this format.
-    For j = 1 To Len(safeName$)
-      If Mid$(safeName$, j, 1) = "|" Then Mid$(safeName$, j, 1) = "_"
+    safeName$ = ""
+    ' Build a sanitized copy without mutating the live channel name.
+    For j = 1 To Len(channelName$(i))
+      nameChar$ = Mid$(channelName$(i), j, 1)
+      If nameChar$ = "|" Then nameChar$ = "_"
+      If Asc(nameChar$) < 32 Then nameChar$ = "_"
+      safeName$ = safeName$ + nameChar$
     Next j
-    Print #2, Str$(channelIdx(i)); "|"; safeName$
+    Print #2, Trim$(Str$(channelIdx(i))); "|"; safeName$
   Next i
   Close #2
   Print "Exported "; channelCount; " local mappings to CHANNELS.TXT"
