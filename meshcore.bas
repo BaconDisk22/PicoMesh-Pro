@@ -840,7 +840,7 @@ Sub DoReadNextMessage
   Loop
 
   If gotMessage = 0 Then
-    Print "No new message found"
+    Print "No new message found (radio response may have timed out)"
     Print
   End If
 End Sub
