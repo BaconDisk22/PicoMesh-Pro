@@ -1712,7 +1712,7 @@ Sub DoGetDeviceTime
   payload$ = Chr$(5)
   SendFrame payload$
 
-  frame$ = ReadFrame$(FRAME_TIMEOUT)
+  frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
   If frame$ = "" Then
     Print "No GET_DEVICE_TIME response"
     Print
