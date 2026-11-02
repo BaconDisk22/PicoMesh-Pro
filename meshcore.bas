@@ -938,6 +938,7 @@ Sub DoReadAllMessages
   Loop
 
   Print "Messages read: "; count
+  If count = 0 Then Print "No messages received; radio may have timed out"
   Print
 End Sub
 
