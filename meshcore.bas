@@ -1637,6 +1637,10 @@ Function ReadResponseSkippingAsync$(timeoutMs)
   Local codeVal
   Local asyncCount
 
+  If timeoutMs <= 0 Then
+    ReadResponseSkippingAsync$ = ""
+    Exit Function
+  End If
   asyncCount = 0
   Do
     frame$ = ReadFrame$(timeoutMs)
