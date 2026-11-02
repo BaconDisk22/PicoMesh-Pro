@@ -1681,7 +1681,7 @@ Sub DoSyncDeviceTime
   payload$ = Chr$(6) + U32ToLE$(epochVal)
   SendFrame payload$
 
-  frame$ = ReadFrame$(FRAME_TIMEOUT)
+  frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
   If frame$ = "" Then
     Print "No SET_DEVICE_TIME response"
   Else
