@@ -1886,6 +1886,11 @@ Function ReadFrame$(timeoutMs)
   Local payloadLen
   Local payload$
 
+  If timeoutMs <= 0 Then
+    ReadFrame$ = ""
+    Exit Function
+  End If
+
   t0 = Timer
 
   ' Find frame start byte ">"
