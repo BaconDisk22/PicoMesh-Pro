@@ -960,8 +960,8 @@ Sub DrainAsyncFrames
     Else
       ' Put non-async frames back is not possible, so stop draining here
       ' Better to show it than lose track completely
-      Print "Pending non-async frame while draining:"
-      DumpHex frame$
+      Print "Pending non-async frame while draining (details suppressed)"
+      Print "Frame length: "; Len(frame$)
       Print
       Exit Do
     End If
