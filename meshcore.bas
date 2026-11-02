@@ -1750,7 +1750,7 @@ Sub DoDeviceQuery
   payload$ = Chr$(22) + Chr$(10)
   SendFrame payload$
 
-  frame$ = ReadFrame$(FRAME_TIMEOUT)
+  frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
   If frame$ <> "" Then
     Print "DEVICE_QUERY response:"
     DumpHex frame$
