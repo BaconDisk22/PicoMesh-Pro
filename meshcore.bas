@@ -831,7 +831,7 @@ Sub DoReadNextMessage
 
       Else
         Print "Skipping non-message frame, code="; codeVal
-        DumpHex frame$
+        Print "Frame length: "; Len(frame$)
         Print
         quietLoops = quietLoops + 1
         Pause 80
@@ -929,7 +929,7 @@ Sub DoReadAllMessages
 
       Else
         Print "Skipping non-message frame, code="; codeVal
-        DumpHex frame$
+        Print "Frame length: "; Len(frame$)
         Print
         quietLoops = quietLoops + 1
         Pause 60
