@@ -815,7 +815,7 @@ Sub DoReadNextMessage
       If codeVal >= 128 Then
         ' Async frame, do not stop yet
         HandleAsyncFrame frame$
-        quietLoops = 0
+        quietLoops = quietLoops + 1
         Pause 80
 
       ElseIf IsRealMessage(codeVal) Then
