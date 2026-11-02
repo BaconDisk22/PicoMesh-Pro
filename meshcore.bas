@@ -1634,7 +1634,9 @@ End Sub
 Function ReadResponseSkippingAsync$(timeoutMs)
   Local frame$
   Local codeVal
+  Local asyncCount
 
+  asyncCount = 0
   Do
     frame$ = ReadFrame$(timeoutMs)
 
@@ -1647,6 +1649,11 @@ Function ReadResponseSkippingAsync$(timeoutMs)
 
     If codeVal >= 128 Then
       HandleAsyncFrame frame$
+      asyncCount = asyncCount + 1
+      If asyncCount >= 20 Then
+        ReadResponseSkippingAsync$ = ""
+        Exit Function
+      End If
     Else
       ReadResponseSkippingAsync$ = frame$
       Exit Function
