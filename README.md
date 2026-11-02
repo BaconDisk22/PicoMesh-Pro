@@ -3,7 +3,7 @@
 An independently maintained, enhanced MMBasic companion client for MeshCore, derived from [Vigoleis912/PicoMeshCore](https://github.com/Vigoleis912/PicoMeshCore).
 
 ## Status
-Early development. The imported `meshcore.bas` is an unchanged upstream baseline; **multi-channel sending, private-channel configuration, and path hash size switching are not implemented or tested yet**.
+Pre-release development. `meshcore.bas` has been modified from its upstream baseline: local channel listing, selection, channel message sending, and name/index backup and restore have been added, alongside UART reliability guards and source-level regression tests. **Physical PicoMite/PicoCalc hardware testing is not yet complete.** Private-channel key configuration and path hash size switching are not confirmed implemented. No release candidate has been validated yet.
 
 ## Hardware
 - Raspberry Pi Pico with PicoMite
