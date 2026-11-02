@@ -1916,6 +1916,7 @@ Function ReadFrame$(timeoutMs)
   t0 = Timer
   Do While Loc(#1) < 1
     If Timer - t0 > timeoutMs Then
+      FlushInput
       ReadFrame$ = ""
       Exit Function
     End If
