@@ -913,7 +913,7 @@ Sub DoReadAllMessages
 
       If codeVal >= 128 Then
         HandleAsyncFrame frame$
-        quietLoops = 0
+        quietLoops = quietLoops + 1
         Pause 60
 
       ElseIf IsRealMessage(codeVal) Then
