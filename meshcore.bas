@@ -2578,6 +2578,20 @@ Sub DoSendMessage
   Line Input "Contact number: ", idxStr$
   Print
 
+  If idxStr$ = "" Then
+    Print "Contact selection missing"
+    Print
+    Exit Sub
+  End If
+
+  For idxVal = 1 To Len(idxStr$)
+    If InStr("0123456789", Mid$(idxStr$, idxVal, 1)) = 0 Then
+      Print "Contact selection must be a whole number"
+      Print
+      Exit Sub
+    End If
+  Next idxVal
+
   idxVal = GetSendableContactIndex(Val(idxStr$))
 
   If idxVal = 0 Then
