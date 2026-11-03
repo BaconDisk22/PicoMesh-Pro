@@ -1,27 +1,69 @@
 # PicoMesh Pro
 
-An independently maintained, enhanced MMBasic companion client for MeshCore, derived from [Vigoleis912/PicoMeshCore](https://github.com/Vigoleis912/PicoMeshCore).
+**A terminal-based MeshCore companion client for Raspberry Pi Pico / PicoMite, written in MMBasic.**
 
-## Status
-Pre-release development. `meshcore.bas` has been modified from its upstream baseline: local channel listing, selection, channel message sending, and name/index backup and restore have been added, alongside UART reliability guards and source-level regression tests. **Physical PicoMite/PicoCalc hardware testing is not yet complete.** Private-channel key configuration and path hash size switching are not confirmed implemented. No release candidate has been validated yet.
+PicoMesh Pro builds on [Vigoleis912's PicoMeshCore](https://github.com/Vigoleis912/PicoMeshCore), adding safer channel workflows, local channel backup and restore, and more defensive UART communication. It is designed for a PicoMite connected by serial UART to a compatible MeshCore companion radio—not as a macOS or mobile application.
+
+> **Pre-release software:** source-level regression checks exist, but the current enhancements have **not yet completed physical PicoMite/PicoCalc hardware validation**. No validated release candidate is available.
+
+## What it does
+
+| Area | Current capabilities |
+| --- | --- |
+| Messaging | Direct-message workflows and channel message reception inherited from upstream; channel sending extended beyond the original #public-only workflow |
+| Channels | Local channel listing and selection; validation of channel names and indexes; protection of reserved #public mapping |
+| Backup and restore | Export and staged restore of local channel names/index mappings; malformed data is rejected before applying changes |
+| Device controls | Contact synchronization, device information, time synchronization, radio settings and diagnostics from the upstream client |
+| UART reliability | Frame length and timeout checks, partial-frame recovery, bounded async-response handling and clearer uncertain-send feedback |
+| Tests | Python source-level regression checks and documented hardware test scenarios |
+
+**Important limitations:** backup files do **not** contain private channel keys; private-key configuration and path-hash-size switching are not confirmed implemented. Source-level tests are not a substitute for hardware validation.
+
+## Screenshots
+
+Real screenshots will be added after capturing the application on PicoMite/PicoCalc hardware. **No simulated screens are presented as actual device output.**
+
+| Planned capture | What it will show |
+| --- | --- |
+| Main menu | Terminal interface and available actions |
+| Channel list | Channel names, selection and #public protection |
+| Messaging | Channel send and receive workflow |
+| Device diagnostics | Radio/device information and UART status |
+
+If you have hardware captures, open a PR adding the images under `docs/screenshots/`, then replace this table with embedded images. Avoid exposing private keys, personal messages, node identifiers or precise locations.
 
 ## Hardware
-- Raspberry Pi Pico with PicoMite
-- Compatible MeshCore companion radio (upstream documents Heltec V4)
-- UART wiring and firmware instructions: [upstream README](docs/UPSTREAM_README.md)
 
-## Planned enhancements
-1. Discover supported channel protocol commands and radio firmware compatibility.
-2. List and select channels, without changing existing #public behavior.
-3. Configure additional public/private channels and protect channel secrets.
-4. Save and restore settings, with explicit recovery on malformed data.
-5. Investigate path hash size selection, only where firmware supports it.
-6. Add reproducible tests and hardware validation.
+- Raspberry Pi Pico running compatible PicoMite firmware (PicoCalc use requires verifying your specific setup)
+- MeshCore companion radio supporting UART (the upstream instructions describe Heltec V4)
+- Appropriate UART wiring and power arrangement for your hardware
 
-See [ROADMAP.md](ROADMAP.md).
+See [original wiring and firmware setup instructions](docs/UPSTREAM_README.md) before connecting devices. Check voltage, pin assignments and firmware compatibility for your exact boards; do not assume Heltec V4 wiring applies to other radios.
 
-## Attribution and license
-Based on PicoMeshCore by Vigoleis912. Original source and upstream documentation are retained. Distributed under the GNU GPL v3; see [LICENSE](LICENSE). Changes to the upstream baseline will be tracked in commits.
+## Getting started
 
-## Safety
-Do not commit private channel keys or credentials. Test against a controlled radio before transmitting.
+1. Set up the PicoMite and MeshCore companion radio according to the [upstream hardware guide](docs/UPSTREAM_README.md).
+2. Obtain [`meshcore.bas`](meshcore.bas) from this repository and transfer it to your PicoMite using your usual MMBasic file-transfer workflow.
+3. Confirm the radio is configured for UART companion operation and that the program's `COM2:115200` setting matches the wiring and radio baud rate.
+4. Run the BASIC program on the PicoMite and start with read-only device queries before attempting sends or channel changes.
+5. For validation, follow the [UART command-response hardware test plan](docs/UART_COMMAND_RESPONSE_HARDWARE_TEST_PLAN.md) and [release-readiness checklist](docs/RC_READINESS_CHECKLIST.md).
+
+This is not yet a verified step-by-step installation procedure for every PicoCalc/PicoMite configuration.
+
+## Development and testing
+
+The `tests/` directory contains static Python checks for source-level guards. GitHub Actions runs the repository's configured static checks; check the specific commit's workflow status before relying on a build. **MMBasic runtime behavior must still be tested on hardware.**
+
+- [Release candidate readiness checklist](docs/RC_READINESS_CHECKLIST.md)
+- [UART hardware test plan](docs/UART_COMMAND_RESPONSE_HARDWARE_TEST_PLAN.md)
+- [Roadmap](ROADMAP.md)
+
+## Upstream and contributions
+
+PicoMesh Pro is independently maintained and derived from [Vigoleis912/PicoMeshCore](https://github.com/Vigoleis912/PicoMeshCore). We intend to propose focused, compatible improvements upstream where appropriate; this repository remains a separate project. Bug reports, reproducible hardware test results and focused pull requests are welcome.
+
+## License and safety
+
+Distributed under the **GNU GPL v3**; see [LICENSE](LICENSE). Original attribution and upstream documentation are retained.
+
+Never commit private channel keys, credentials or sensitive radio traffic. Use a controlled test environment when validating transmission behavior.
