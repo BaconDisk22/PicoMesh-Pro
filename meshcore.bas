@@ -2692,8 +2692,10 @@ Function WaitForSendConfirmation(timeoutMs)
   Local frame$
   Local codeVal
   Local t0
+  Local asyncCount
 
   t0 = Timer
+  asyncCount = 0
 
   Do While Timer - t0 < timeoutMs
     frame$ = ReadFrame$(300)
@@ -2709,6 +2711,12 @@ Function WaitForSendConfirmation(timeoutMs)
 
       ElseIf codeVal >= 128 Then
         HandleAsyncFrame frame$
+        asyncCount = asyncCount + 1
+        If asyncCount >= 20 Then
+          Print "Send confirmation interrupted by continuous async traffic"
+          WaitForSendConfirmation = 0
+          Exit Function
+        End If
 
       Else
         Print "Extra non-async frame during send confirm wait:"
