@@ -1417,7 +1417,8 @@ Sub DoInitialize
   DoDeviceQuery
   DoAppStart
 
-  Print "Initialization complete"
+  Print "Initialization commands finished"
+  Print "Check the responses above to confirm radio readiness"
   Print
 End Sub
 
