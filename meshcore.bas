@@ -2695,6 +2695,11 @@ Function WaitForSendConfirmation(timeoutMs)
   Local t0
   Local asyncCount
 
+  If timeoutMs <= 0 Then
+    WaitForSendConfirmation = 0
+    Exit Function
+  End If
+
   t0 = Timer
   asyncCount = 0
 
