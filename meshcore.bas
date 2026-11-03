@@ -2619,20 +2619,17 @@ Sub DoSendMessage
   deliveredOk = 0
 
   Do While doneFlag = 0
-    frame$ = ReadFrame$(FRAME_TIMEOUT)
+    frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
 
     If frame$ = "" Then
-      Print "No send response"
+      Print "No send response; delivery status unknown (do not retry blindly)"
       Print
       Exit Sub
     End If
 
     codeVal = Asc(Mid$(frame$, 1, 1))
 
-    If codeVal >= 128 Then
-      HandleAsyncFrame frame$
-
-    ElseIf codeVal = 0 Then
+    If codeVal = 0 Then
       Print "Send OK"
       DumpHex frame$
       queuedOk = 1
