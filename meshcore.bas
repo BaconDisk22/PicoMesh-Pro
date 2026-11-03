@@ -2001,6 +2001,7 @@ Sub DoGetContacts
   Local expectedVal
   Local recvCount
   Local quietVal
+  Local asyncStreak
 
   Print "Refreshing contacts..."
   Print
@@ -2014,6 +2015,7 @@ Sub DoGetContacts
   expectedVal = 0
   doneFlag = 0
   quietVal = 0
+  asyncStreak = 0
 
   payload$ = Chr$(4)
   SendFrame payload$
@@ -2041,8 +2043,15 @@ Sub DoGetContacts
 
       If codeVal >= 128 Then
         HandleAsyncFrame frame$
+        asyncStreak = asyncStreak + 1
+        If asyncStreak >= 20 Then
+          Print "Contact sync stopped after continuous async traffic"
+          Print "Contacts may be incomplete; retry after traffic subsides"
+          Exit Do
+        End If
 
       Else
+        asyncStreak = 0
         Select Case codeVal
           Case 2
             If Len(frame$) >= 5 Then
