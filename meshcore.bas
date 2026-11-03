@@ -1770,7 +1770,7 @@ Sub DoAppStart
   payload$ = Chr$(1) + Chr$(10) + String$(6, Chr$(0))
   SendFrame payload$
 
-  frame$ = ReadFrame$(FRAME_TIMEOUT)
+  frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
   If frame$ <> "" Then
     Print "APP_START response:"
     DumpHex frame$

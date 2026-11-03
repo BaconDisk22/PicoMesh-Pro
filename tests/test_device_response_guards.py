@@ -23,3 +23,8 @@ class DeviceResponseTests(unittest.TestCase):
         body = subroutine("DoSyncDeviceTime")
         self.assertIn("If codeVal = 0 Then", body)
         self.assertIn("ElseIf codeVal = 1 Then", body)
+
+    def test_app_start_skips_interleaved_async_frames(self):
+        body = subroutine("DoAppStart")
+        self.assertIn("frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)", body)
+        self.assertNotIn("frame$ = ReadFrame$(FRAME_TIMEOUT)", body)
