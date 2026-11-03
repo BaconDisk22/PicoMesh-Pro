@@ -2586,6 +2586,15 @@ Sub DoSendMessage
     Exit Sub
   End If
 
+  ' 3 command bytes + 4 timestamp bytes + 6 recipient bytes precede text.
+  ' Reject oversized messages before constructing or transmitting a frame.
+  If Len(msgText$) > MAX_FRAME_LEN - 13 Then
+    Print "Message too long for local frame limit"
+    Print "Maximum text bytes: "; MAX_FRAME_LEN - 13
+    Print
+    Exit Sub
+  End If
+
   prefix$ = PubKeyPrefix6$(contactPubKey$(idxVal))
   epochVal = Int(DateTimeToUnix(Date$, Time$))
 
