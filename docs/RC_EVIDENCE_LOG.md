@@ -16,7 +16,7 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 - Commit SHA shown in run artifact metadata: `13dc8221ce0edc47622d0777fb5d51896d69ad86` (`main`)
 - Job conclusion: **SUCCESS** (`source-regressions`; all reported steps succeeded)
 - Test suite: `python -m unittest discover -s tests -v` (source-level checks only)
-- Test log artifact: `source-test-results` (artifact ID `13281249786`, uploaded successfully; log contents not independently reviewed)
+- Test log artifact: `source-test-results` (artifact ID `13281249786`, uploaded successfully; log independently reviewed: 49 tests, 0 failures, 0 errors, `OK`)
 - Failures and follow-up issues: **NONE REPORTED BY JOB** (hardware issues not assessed)
 
 ## Hardware checks
