@@ -4,7 +4,7 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 
 ## Candidate identity
 
-- Candidate commit SHA: **NOT SELECTED**
+- Candidate commit SHA (CI-verified baseline): `13dc8221ce0edc47622d0777fb5d51896d69ad86` (reverify if candidate changes)
 - Date / tester: **NOT RECORDED**
 - PicoMite/PicoCalc model and firmware: **NOT RECORDED**
 - MeshCore companion model and firmware: **NOT RECORDED**
@@ -12,11 +12,12 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 
 ## Automated checks
 
-- GitHub Actions run URL: **NOT VERIFIED**
-- Commit SHA shown in run: **NOT VERIFIED**
-- Job conclusion: **NOT VERIFIED**
+- GitHub Actions run URL: https://github.com/BaconDisk22/PicoMesh-Pro/actions/runs/41743741668
+- Commit SHA shown in run artifact metadata: `13dc8221ce0edc47622d0777fb5d51896d69ad86` (`main`)
+- Job conclusion: **SUCCESS** (`source-regressions`; all reported steps succeeded)
 - Test suite: `python -m unittest discover -s tests -v` (source-level checks only)
-- Failures and follow-up issues: **NOT RECORDED**
+- Test log artifact: `source-test-results` (artifact ID `13281249786`, uploaded successfully; log contents not independently reviewed)
+- Failures and follow-up issues: **NONE REPORTED BY JOB** (hardware issues not assessed)
 
 ## Hardware checks
 
