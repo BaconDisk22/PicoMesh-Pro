@@ -160,17 +160,40 @@ def read_response_skipping_async(script: Iterator[Optional[bytes]]) -> Optional[
         return frame
 
 
-def wait_for_send_confirmation(script: Iterator[Optional[bytes]], polls: int) -> str:
-    """Mirror of WaitForSendConfirmation; ``polls`` approximates the 2000 ms
-    window divided into 300 ms ReadFrame$ attempts."""
+SEND_CONFIRM_MIN_MS = 2000
+SEND_CONFIRM_MAX_MS = 15000
+CONFIRM_POLL_MS = 300  # ReadFrame$(300) inside WaitForSendConfirmation
+
+
+def sent_frame(ack: bytes, est_timeout_ms: int = 3000, flood: bool = False) -> bytes:
+    """RESP_CODE_SENT as MeshCore companion firmware writes it (10 bytes)."""
+    return bytes([RESP_SENT, 1 if flood else 0]) + ack[:4] + u32le(est_timeout_ms)
+
+
+def confirm_frame(ack: bytes, trip_ms: int = 850) -> bytes:
+    """PUSH_CODE_SEND_CONFIRMED as the firmware writes it (9 bytes)."""
+    return bytes([PUSH_SEND_CONFIRMED]) + ack[:4] + u32le(trip_ms)
+
+
+def confirm_wait_ms(sent: bytes) -> int:
+    """Wait window DoSendMessage derives from the radio's estimated timeout."""
+    wait = int.from_bytes(sent[6:10], "little")
+    return max(SEND_CONFIRM_MIN_MS, min(SEND_CONFIRM_MAX_MS, wait))
+
+
+def wait_for_send_confirmation(script: Iterator[Optional[bytes]], polls: int, ack: bytes) -> str:
+    """Mirror of WaitForSendConfirmation(timeoutMs, ackKey$); ``polls`` approximates
+    the wait window divided into 300 ms ReadFrame$ attempts."""
+    if len(ack) != 4:
+        return "no-confirmation"
     async_count = 0
     for _ in range(polls):
         frame = next(script)
         if not frame:
             continue
-        if frame[0] == PUSH_SEND_CONFIRMED:
+        if frame[0] == PUSH_SEND_CONFIRMED and len(frame) >= 5 and frame[1:5] == ack:
             return "delivered"
-        if frame[0] >= ASYNC_MIN:
+        if frame[0] >= ASYNC_MIN:  # includes confirmations for other messages
             async_count += 1
             if async_count >= ASYNC_STREAK_LIMIT:
                 return "interrupted"
@@ -178,11 +201,12 @@ def wait_for_send_confirmation(script: Iterator[Optional[bytes]], polls: int) ->
     return "no-confirmation"
 
 
-def direct_send_outcome(replies: Iterable[Optional[bytes]], confirm_polls: int = 7) -> str:
+def direct_send_outcome(replies: Iterable[Optional[bytes]], confirm_polls: Optional[int] = None) -> str:
     """Mirror of the response handling in Sub DoSendMessage.
 
     Returns one of: ``unknown`` (no response; do not retry blindly), ``failed``,
-    ``unexpected``, ``delivered``, ``queued-unconfirmed``, ``interrupted``.
+    ``unexpected``, ``untracked`` (accepted but no ACK code to match),
+    ``delivered``, ``queued-unconfirmed``, ``interrupted``.
     """
     script = _script(replies)
     frame = read_response_skipping_async(script)
@@ -191,9 +215,14 @@ def direct_send_outcome(replies: Iterable[Optional[bytes]], confirm_polls: int =
     code = frame[0]
     if code == RESP_ERR:
         return "failed"
-    if code not in (RESP_OK, RESP_SENT):
+    if code == RESP_OK:
+        return "untracked"
+    if code != RESP_SENT:
         return "unexpected"
-    outcome = wait_for_send_confirmation(script, confirm_polls)
+    if len(frame) < 10:
+        return "untracked"
+    polls = confirm_polls if confirm_polls is not None else -(-confirm_wait_ms(frame) // CONFIRM_POLL_MS)
+    outcome = wait_for_send_confirmation(script, polls, frame[2:6])
     return "queued-unconfirmed" if outcome == "no-confirmation" else outcome
 
 
