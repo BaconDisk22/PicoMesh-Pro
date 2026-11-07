@@ -19,8 +19,8 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync. **Fixed in source; hardware check pending** | MMBasic (manual checked) |
 | R5 | Medium | Startup | Unset Pico clock is pushed to the radio on every start. **Fixed in source; hardware check pending** | Code fact |
 | R6 | Medium | Radio config | Radio params and TX power are sent with no range check or confirmation. **Fixed in source; hardware check pending** | Code fact |
-| R7 | Medium | Channels | Channel scan/import: late replies cascade, and failures are silent | Code fact |
-| R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets | Protocol (confirmed) |
+| R7 | Medium | Channels | Channel scan/import: late replies cascade, and failures are silent. **Fixed in source; hardware check pending** | Code fact |
+| R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets. **Fixed in source** | Protocol (confirmed) |
 | R9 | Low | UART | `MAX_FRAME_LEN = 1024` is above what an MMBasic string can hold. **Fixed in source** | MMBasic |
 | R10 | Low | UART | One bad frame flushes good frames already buffered (pinned by #79). **Fixed in source; hardware check pending** | Code fact |
 | R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded. **Window fixed in source** | Code fact / Protocol (confirmed) |
@@ -94,7 +94,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `DoScanRadioChannels` and `DoSyncRadioChannels` query slots 0–7 back to back without flushing between queries. If one reply arrives after its timeout, it gets read as the reply to the next query. The index check correctly rejects it, but the next slot's reply then lags in turn, and later slots can all mismatch. Import counts only invalid names. No response, rejection, index mismatch, a short frame and "list full" are all skipped silently, so the summary can say "Added 0" with no reason.
 
-**Proposed fix:** call `FlushInput` (or drain) before each slot query. Count and report each skip reason in the import summary.
+**Status:** fixed in source. `ReadRadioChannelAt` and each slot in `DoSyncRadioChannels` call `FlushInput` before sending the query. The import summary now counts no reply, radio rejected, bad or mismatched reply, local list full, and invalid names. Covered in `tests/test_channel_uart_interruption.py`.
+
+**Original proposed fix:** call `FlushInput` (or drain) before each slot query. Count and report each skip reason in the import summary.
 
 ### R8 — Legacy contact messages parsed with v3 offsets (Low, Protocol)
 
@@ -102,7 +104,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 **Protocol check (2026-11-07):** confirmed against MeshCore `main` at `81dbae5` (`MyMesh::queueMessage`). Code 7 is code, sender prefix (6), path length, text type, timestamp (4), then text, so the prefix is bytes 2–7 and the text starts at byte 14.
 
-**Proposed fix:** branch on the code the same way `ParseChannelMessageFrame` does.
+**Status:** fixed in source. `ParseContactMessageFrame` picks the sender-prefix, timestamp and text offsets by code (16 = v3, otherwise legacy), and checks the length against the right text start. The test model and its source anchors now use both firmware layouts.
+
+**Original proposed fix:** branch on the code the same way `ParseChannelMessageFrame` does.
 
 ### R9 — `MAX_FRAME_LEN` is larger than an MMBasic string (Low, MMBasic)
 
