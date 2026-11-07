@@ -46,6 +46,9 @@ Dim gRxBuf$
 ' radio to this length including the "<node name>: " prefix it adds.
 Const MAX_TEXT_LEN = 160
 
+' Longest the startup raw-byte dump may run.
+Const BOOT_READ_MAX_MS = 5000
+
 ' ACK code of the last direct message still waiting for confirmation, so a
 ' confirmation arriving after the wait window can still be reported.
 Dim gPendingAck$
@@ -626,7 +629,13 @@ Sub DoRestoreLocalChannels
   countVal = 0
   validFile = 1
   seenPublic = 0
+  On Error Skip 1
   Open "CHANNELS.TXT" For Input As #2
+  If MM.Errno <> 0 Then
+    Print "Could not open CHANNELS.TXT: "; MM.ErrMsg$
+    Print "Current channels unchanged"
+    Exit Sub
+  End If
   If Eof(#2) Then
     validFile = 0
   Else
@@ -711,7 +720,14 @@ Sub DoExportLocalChannels
     Exit Sub
   End If
 
+  On Error Skip 1
   Open "CHANNELS.TXT" For Output As #2
+  If MM.Errno <> 0 Then
+    Print "Could not write CHANNELS.TXT: "; MM.ErrMsg$
+    Print "Check the drive is present and not write-protected"
+    Print
+    Exit Sub
+  End If
   Print #2, "PICOMESH-CHANNELS-V1"
   For i = 1 To channelCount
     safeName$ = ""
@@ -1854,17 +1870,24 @@ Function ReadResponseSkippingAsync$(timeoutMs)
   Local frame$
   Local codeVal
   Local asyncCount
+  Local t0
+  Local remainingMs
 
   If timeoutMs <= 0 Then
     ReadResponseSkippingAsync$ = ""
     Exit Function
   End If
   asyncCount = 0
+  ' One overall deadline: async frames no longer restart the full timeout.
+  t0 = Timer
   Do
-    frame$ = ReadFrame$(timeoutMs)
+    remainingMs = timeoutMs - (Timer - t0)
+    frame$ = ""
+    If remainingMs > 0 Then frame$ = ReadFrame$(remainingMs)
 
     If frame$ = "" Then
-      NoteNoReply
+      ' Only count silence; a radio sending async traffic is still alive.
+      If asyncCount = 0 Then NoteNoReply
       ReadResponseSkippingAsync$ = ""
       Exit Function
     End If
@@ -2329,18 +2352,24 @@ Sub DoGetContacts
   BuildSendableMap
 End Sub
 
+' Print raw bytes until timeoutMs of silence, but never for longer than
+' BOOT_READ_MAX_MS in total, so a radio that keeps sending cannot hold up
+' startup forever.
 Sub ReadRawBytes(timeoutMs)
   Local t0
+  Local tStart
   Local b$
 
   t0 = Timer
+  tStart = t0
   Do
     If Loc(#1) > 0 Then
       b$ = Input$(1, #1)
       Print Right$("0" + Hex$(Asc(b$)), 2); " ";
       t0 = Timer
     End If
-  Loop Until Timer - t0 > timeoutMs
+  Loop Until Timer - t0 > timeoutMs Or Timer - tStart > BOOT_READ_MAX_MS
+  If Timer - tStart > BOOT_READ_MAX_MS Then Print "(stopped after "; BOOT_READ_MAX_MS / 1000; " s of continuous output)"
   Print
 End Sub
 
@@ -2530,15 +2559,20 @@ Function UnixToDate$(t)
   Local leapVal
   Local mLen(12)
   Local d$, tm$
+  Local tVal
 
-  secondsVal = t Mod 60
-  t = Int(t / 60)
+  ' MMBasic passes plain variables by reference; work on a copy so the
+  ' caller's value is never changed.
+  tVal = Int(t)
 
-  minutesVal = t Mod 60
-  t = Int(t / 60)
+  secondsVal = tVal Mod 60
+  tVal = Int(tVal / 60)
 
-  hoursVal = t Mod 24
-  daysVal = Int(t / 24)
+  minutesVal = tVal Mod 60
+  tVal = Int(tVal / 60)
+
+  hoursVal = tVal Mod 24
+  daysVal = Int(tVal / 24)
 
   yearVal = 1970
 
