@@ -1,0 +1,186 @@
+name: Hardware test report
+description: Report results from running PicoMesh Pro on a real PicoMite/PicoCalc with a MeshCore companion radio.
+title: "Hardware test: <board> / <companion> / <short outcome>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. Read [docs/HARDWARE_TESTER_PROGRAM.md](https://github.com/TheLogsAreScreaming/PicoMesh-Pro/blob/main/docs/HARDWARE_TESTER_PROGRAM.md) first.
+
+        **This is experimental source code, not a verified release.** Use test nodes and non-sensitive data only.
+        **Do not post** private channel keys, contact public keys, personal messages, precise coordinates or identifying node traffic. Redact logs before pasting them.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Safety and privacy
+      options:
+        - label: I removed channel secrets, public keys, personal messages and precise locations from everything in this report.
+          required: true
+        - label: I used test nodes and did not send emergency or safety-critical traffic.
+          required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Source commit SHA
+      description: Full 40-character SHA of the meshcore.bas you loaded (from the commit page on GitHub).
+      placeholder: 2065f65c1d3c3aaa02f584f46efc0401e6f4fc2d
+    validations:
+      required: true
+  - type: input
+    id: board
+    attributes:
+      label: PicoMite / PicoCalc model and MMBasic firmware version
+      placeholder: "e.g. PicoCalc with Pico 2, PicoMite MMBasic <version>"
+    validations:
+      required: true
+  - type: input
+    id: companion
+    attributes:
+      label: MeshCore companion radio model and firmware version
+      placeholder: "e.g. <board>, MeshCore companion firmware <version>"
+    validations:
+      required: true
+  - type: input
+    id: wiring
+    attributes:
+      label: UART port, baud rate and wiring
+      description: The source defaults to COM2 on GP9/GP8 at 115200. Say if you changed this, and how TX/RX/GND/power are connected.
+    validations:
+      required: true
+  - type: dropdown
+    id: result_load
+    attributes:
+      label: "Program loads on PicoMite/PicoCalc"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_uart
+    attributes:
+      label: "UART connection and device query"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_clock
+    attributes:
+      label: "Clock sync and APP_START"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_contacts
+    attributes:
+      label: "Contact synchronization with async frames"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_direct
+    attributes:
+      label: "Direct send, accepted/unknown/delivery feedback"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_channels
+    attributes:
+      label: "Channel list, #public mapping and channel send"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_backup
+    attributes:
+      label: "Channel export/restore and malformed backup"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_partial
+    attributes:
+      label: "Partial UART frames, timeout and recovery"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: result_reconnect
+    attributes:
+      label: "Disconnect/reconnect and extended smoke test"
+      options:
+        - NOT TESTED
+        - PASS
+        - FAIL
+        - PARTIAL
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened
+      description: For each FAIL or PARTIAL, give the steps to reproduce, what you expected and what you saw.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted serial output or screenshots
+      description: Optional. Check again that no keys, names or locations remain.
+      render: text
+    validations:
+      required: false
+  - type: dropdown
+    id: attribution
+    attributes:
+      label: May we credit you in release notes?
+      options:
+        - "No"
+        - Yes, using my GitHub username
+      default: 0
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        A report here is not a release approval. Maintainers copy confirmed results into `docs/RC_EVIDENCE_LOG.md`, and the release stays on HOLD until the maintainer explicitly approves it.
