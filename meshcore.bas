@@ -29,6 +29,11 @@ Dim gLastMenu$
 
 Const MAX_FRAME_LEN = 1024
 
+' MMBasic strings hold at most 255 characters. SendFrame joins a 3-byte
+' header to the payload, so outgoing payloads must stay at or below 252.
+Const MAX_STRING_LEN = 255
+Const MAX_SEND_PAYLOAD = MAX_STRING_LEN - 3
+
 Const MAX_CONTACTS = 320
 
 Dim contactName$(MAX_CONTACTS)
@@ -439,10 +444,10 @@ Sub DoSendChannelMessage
   End If
 
   ' 3 command/header bytes + 4 timestamp bytes precede the text.
-  ' Keep the complete outgoing payload within the local frame bound.
-  If Len(msgText$) > MAX_FRAME_LEN - 7 Then
+  ' Check before building payload$ so no string exceeds 255 characters.
+  If Len(msgText$) > MAX_SEND_PAYLOAD - 7 Then
     Print "Message too long for local frame limit"
-    Print "Maximum text bytes: "; MAX_FRAME_LEN - 7
+    Print "Maximum text bytes: "; MAX_SEND_PAYLOAD - 7
     Print
     Exit Sub
   End If
@@ -1863,7 +1868,7 @@ End Sub
 
 Sub SendFrame(payload$)
   Local hdr$
-  If Len(payload$) < 1 Or Len(payload$) > MAX_FRAME_LEN Then
+  If Len(payload$) < 1 Or Len(payload$) > MAX_SEND_PAYLOAD Then
     Print "Invalid outgoing frame length; frame not sent"
     Exit Sub
   End If
@@ -2611,10 +2616,10 @@ Sub DoSendMessage
   End If
 
   ' 3 command bytes + 4 timestamp bytes + 6 recipient bytes precede text.
-  ' Reject oversized messages before constructing or transmitting a frame.
-  If Len(msgText$) > MAX_FRAME_LEN - 13 Then
+  ' Check before building payload$ so no string exceeds 255 characters.
+  If Len(msgText$) > MAX_SEND_PAYLOAD - 13 Then
     Print "Message too long for local frame limit"
-    Print "Maximum text bytes: "; MAX_FRAME_LEN - 13
+    Print "Maximum text bytes: "; MAX_SEND_PAYLOAD - 13
     Print
     Exit Sub
   End If

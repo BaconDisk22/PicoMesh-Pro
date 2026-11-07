@@ -52,7 +52,7 @@ class ChannelGuardTests(unittest.TestCase):
 
     def test_channel_send_respects_local_frame_bound(self):
         body = sub("DoSendChannelMessage")
-        self.assertIn("Len(msgText$) > MAX_FRAME_LEN - 7", body)
+        self.assertIn("Len(msgText$) > MAX_SEND_PAYLOAD - 7", body)
         self.assertIn("Message too long for local frame limit", body)
 
     def test_channel_send_does_not_dump_raw_response(self):
