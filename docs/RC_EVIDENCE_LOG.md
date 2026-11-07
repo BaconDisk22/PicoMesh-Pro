@@ -4,7 +4,7 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 
 ## Candidate identity
 
-- Candidate commit SHA (CI-verified baseline): `2065f65c1d3c3aaa02f584f46efc0401e6f4fc2d` (reverify if candidate changes)
+- Candidate commit SHA (CI-verified baseline): `eccf8d517b6d6470a1d98faa8c2896ee550499e4` (reverify if candidate changes)
 - Date / tester: **NOT RECORDED**
 - PicoMite/PicoCalc model and firmware: **NOT RECORDED**
 - MeshCore companion model and firmware: **NOT RECORDED**
@@ -12,12 +12,12 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 
 ## Automated checks
 
-- GitHub Actions run URL: https://github.com/TheLogsAreScreaming/PicoMesh-Pro/actions/runs/41754015177 (`workflow_dispatch` on `main`)
-- Commit SHA shown in run metadata: `2065f65c1d3c3aaa02f584f46efc0401e6f4fc2d` (`main`, merge of #75)
+- GitHub Actions run URL: https://github.com/TheLogsAreScreaming/PicoMesh-Pro/actions/runs/42320456867 (`push` on `main`)
+- Commit SHA shown in run metadata: `eccf8d517b6d6470a1d98faa8c2896ee550499e4` (`main`, merge of #81)
 - Job conclusion: **SUCCESS** (`source-regressions`; all reported steps succeeded)
 - Test suite: `python -m unittest discover -s tests -v` (source-level checks only)
-- Test log artifact: `source-test-results` (artifact ID `13287248377`, downloaded and reviewed 2026-11-06: 56 tests, 0 failures, 0 errors, `OK`; 49 prior checks + 7 UART simulator tests from #75)
-- Superseded baseline: run 41743741668 at `13dc8221ce0edc47622d0777fb5d51896d69ad86` (49 tests, `OK`)
+- Test log artifact: `source-test-results` (artifact ID `13552214062`, downloaded and reviewed 2026-11-06: 114 tests, 0 failures, 0 errors, `OK`; 56 prior + 28 session scenarios #78 + 25 channel/UART interruption #79 + 5 issue-form checks #81)
+- Superseded baselines: run 41754015177 at `2065f65c1d3c3aaa02f584f46efc0401e6f4fc2d` (56 tests, `OK`); run 41743741668 at `13dc8221ce0edc47622d0777fb5d51896d69ad86` (49 tests, `OK`)
 - Failures and follow-up issues: **NONE REPORTED BY JOB** (hardware issues not assessed)
 
 ## Hardware checks
