@@ -25,7 +25,7 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | R10 | Low | UART | One bad frame flushes good frames already buffered (pinned by #79). **Fixed in source; hardware check pending** | Code fact |
 | R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded. **Fixed in source; hardware check pending** | Code fact / Protocol (confirmed) |
 | R12 | Low | Reconnect | No disconnect detection or reconnect guidance. **Fixed in source** | Code fact |
-| R13 | Low | Robustness | Smaller hazards: boot read loop, worst-case blocking, by-reference argument, file I/O errors | Code fact / MMBasic |
+| R13 | Low | Robustness | Smaller hazards: boot read loop, worst-case blocking, by-reference argument, file I/O errors. **Mostly fixed in source** | Code fact / MMBasic |
 
 ## Findings
 
@@ -137,6 +137,15 @@ The port is opened once at start. If the radio resets or loses power, every comm
 **Original proposed fix:** count consecutive no-response results. After about 3, print a hint to check wiring and power and run Initialize radio.
 
 ### R13 — Smaller robustness notes
+
+**Status:** fixed in source, except atomic export.
+- The boot dump stops after `BOOT_READ_MAX_MS` (5 s) in total.
+- `ReadResponseSkippingAsync$` has one overall deadline, so async frames no longer restart the full 3 s timeout each time (the worst case was about 63 s).
+- `UnixToDate$` works on a local copy of its argument.
+- Export and restore wrap `Open` in `On Error Skip 1` / `MM.Errno`, and report a missing or write-protected drive instead of stopping.
+- Still open: export overwrites `CHANNELS.TXT` in place.
+
+Covered by `tests/test_r13_hardening.py`, which also checks a Python port of `UnixToDate$` against the calendar for 500+ timestamps.
 
 - **Boot read loop (Code fact):** `ReadRawBytes 1000` at startup reads until 1 s of silence. A radio that keeps sending (debug logging, a stuck port) keeps the program there forever. Add an overall deadline.
 - **Worst-case blocking (Code fact):** `ReadResponseSkippingAsync$` gives each read the full 3 s timeout and allows 20 async frames, so it can block for about 63 s before giving up. Use one overall deadline.
