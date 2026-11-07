@@ -39,6 +39,15 @@ Const MAX_SEND_PAYLOAD = MAX_STRING_LEN - 3
 Const SEND_CONFIRM_MIN_MS = 2000
 Const SEND_CONFIRM_MAX_MS = 15000
 
+' Plausible Pico clock window (2024-01-01 to 2100-01-01 UTC). An unset
+' PicoMite clock reads 2000-01-01, which is outside this window.
+Const CLOCK_MIN_EPOCH = 1704067200
+Const CLOCK_MAX_EPOCH = 4102444800
+
+' Radio parameter limits accepted by MeshCore companion firmware.
+Const RADIO_MIN_FREQ_MHZ = 150
+Const RADIO_MAX_FREQ_MHZ = 2500
+
 Const MAX_CONTACTS = 320
 
 Dim contactName$(MAX_CONTACTS)
@@ -458,6 +467,7 @@ Sub DoSendChannelMessage
   End If
 
   epochVal = Int(DateTimeToUnix(Date$, Time$))
+  If PicoClockValid() = 0 Then Print "Warning: Pico clock not set; message timestamp will be wrong"
 
   payload$ = ""
   payload$ = payload$ + Chr$(3)
@@ -1497,22 +1507,43 @@ Sub DoSetRadioParams
   Local freqEnc, bwEnc
   Local payload$, frame$
   Local codeVal
+  Local confirm$
 
   Print "Set radio params"
   Print "----------------"
+  Print "Wrong values can take this node off the mesh or outside your band"
   Line Input "Freq MHz: ", freqStr$
   Line Input "BW kHz:   ", bwStr$
   Line Input "SF:       ", sfStr$
   Line Input "CR:       ", crStr$
   Print
 
+  If IsDecimalNumber(freqStr$) = 0 Or IsDecimalNumber(bwStr$) = 0 Then
+    Print "Frequency and bandwidth must be plain numbers"
+    Print
+    Exit Sub
+  End If
+
+  If IsWholeNumber(sfStr$) = 0 Or IsWholeNumber(crStr$) = 0 Then
+    Print "SF and CR must be whole numbers"
+    Print
+    Exit Sub
+  End If
+
   freqMHz = Val(freqStr$)
   bwKHz   = Val(bwStr$)
   sfVal   = Val(sfStr$)
   crVal   = Val(crStr$)
 
-  If freqMHz <= 0 Or bwKHz <= 0 Then
-    Print "Invalid frequency or bandwidth"
+  If freqMHz < RADIO_MIN_FREQ_MHZ Or freqMHz > RADIO_MAX_FREQ_MHZ Then
+    Print "Frequency must be "; RADIO_MIN_FREQ_MHZ; " to "; RADIO_MAX_FREQ_MHZ; " MHz"
+    Print
+    Exit Sub
+  End If
+
+  If IsLoraBandwidth(Int(bwKHz * 1000 + 0.5)) = 0 Then
+    Print "Bandwidth must be a LoRa value:"
+    Print "7.8 10.4 15.6 20.8 31.25 41.7 62.5 125 250 500"
     Print
     Exit Sub
   End If
@@ -1529,8 +1560,25 @@ Sub DoSetRadioParams
     Exit Sub
   End If
 
-  freqEnc = Int(freqMHz * 1000)
-  bwEnc   = Int(bwKHz * 1000)
+  Print "Current:  ";
+  If gFreqVal > 0 Then
+    Print gFreqVal / 1000; " MHz, BW "; gBwVal / 1000; " kHz, SF "; gSfVal; ", CR "; gCrVal
+  Else
+    Print "unknown (run Initialize radio to read it)"
+  End If
+  Print "New:      "; freqMHz; " MHz, BW "; bwKHz; " kHz, SF "; sfVal; ", CR "; crVal
+  Print "The radio saves these settings"
+  Line Input "Type APPLY to send: ", confirm$
+  Print
+  If confirm$ <> "APPLY" Then
+    Print "Cancelled; radio settings unchanged"
+    Print
+    Exit Sub
+  End If
+
+  ' Round rather than truncate so float error (e.g. 256.001 * 1000) cannot lose 1 kHz.
+  freqEnc = Int(freqMHz * 1000 + 0.5)
+  bwEnc   = Int(bwKHz * 1000 + 0.5)
 
   payload$ = ""
   payload$ = payload$ + Chr$(11)
@@ -1573,16 +1621,45 @@ Sub DoSetTxPower
   Local pwrVal
   Local payload$, frame$
   Local codeVal
+  Local confirm$
 
   Print "Set TX power"
   Print "------------"
   Line Input "TX power dBm: ", pwrStr$
   Print
 
+  If IsWholeNumber(pwrStr$) = 0 Then
+    Print "TX power must be a whole number of dBm"
+    Print
+    Exit Sub
+  End If
+
   pwrVal = Val(pwrStr$)
 
   If pwrVal < 0 Or pwrVal > 30 Then
     Print "Invalid TX power"
+    Print
+    Exit Sub
+  End If
+
+  ' Respect the maximum the radio reported in SELF_INFO, when known.
+  If gMaxTxPowerVal > 0 And pwrVal > gMaxTxPowerVal Then
+    Print "Radio maximum is "; gMaxTxPowerVal; " dBm"
+    Print
+    Exit Sub
+  End If
+
+  Print "Current:  ";
+  If gMaxTxPowerVal > 0 Then
+    Print gTxPowerVal; " dBm (max "; gMaxTxPowerVal; ")"
+  Else
+    Print "unknown (run Initialize radio to read it)"
+  End If
+  Print "New:      "; pwrVal; " dBm"
+  Line Input "Type APPLY to send: ", confirm$
+  Print
+  If confirm$ <> "APPLY" Then
+    Print "Cancelled; TX power unchanged"
     Print
     Exit Sub
   End If
@@ -1616,6 +1693,58 @@ Sub DoSetTxPower
     Print
   End If
 End Sub
+
+' True when the Pico clock is inside the plausible window.
+Function PicoClockValid()
+  Local e
+  e = DateTimeToUnix(Date$, Time$)
+  If e >= CLOCK_MIN_EPOCH And e < CLOCK_MAX_EPOCH Then
+    PicoClockValid = 1
+  Else
+    PicoClockValid = 0
+  End If
+End Function
+
+' True for 1 to 6 decimal digits and nothing else.
+Function IsWholeNumber(s$)
+  Local i
+  IsWholeNumber = 0
+  If Len(s$) < 1 Or Len(s$) > 6 Then Exit Function
+  For i = 1 To Len(s$)
+    If InStr("0123456789", Mid$(s$, i, 1)) = 0 Then Exit Function
+  Next i
+  IsWholeNumber = 1
+End Function
+
+' True for digits with at most one decimal point (e.g. 869.525).
+Function IsDecimalNumber(s$)
+  Local i, dots, digits, c$
+  IsDecimalNumber = 0
+  If Len(s$) < 1 Or Len(s$) > 12 Then Exit Function
+  dots = 0
+  digits = 0
+  For i = 1 To Len(s$)
+    c$ = Mid$(s$, i, 1)
+    If c$ = "." Then
+      dots = dots + 1
+    ElseIf InStr("0123456789", c$) > 0 Then
+      digits = digits + 1
+    Else
+      Exit Function
+    End If
+  Next i
+  If dots <= 1 And digits >= 1 Then IsDecimalNumber = 1
+End Function
+
+' True when bwHz is one of the standard LoRa bandwidths.
+Function IsLoraBandwidth(bwHz)
+  Select Case bwHz
+    Case 7800, 10400, 15600, 20800, 31250, 41700, 62500, 125000, 250000, 500000
+      IsLoraBandwidth = 1
+    Case Else
+      IsLoraBandwidth = 0
+  End Select
+End Function
 
 Sub ShowRadioSettings
   Local freqMHz
@@ -1689,6 +1818,15 @@ Sub DoSyncDeviceTime
   Print "Pico time:    "; Time$
   Print "Epoch:        "; Int(epochVal)
 
+  ' The radio only accepts forward time changes, so never push an unset
+  ' or implausible Pico clock: a future date could not be undone.
+  If PicoClockValid() = 0 Then
+    Print "Pico clock looks unset or wrong; time sync skipped"
+    Print "Set the Pico clock with the DATE$ and TIME$ commands, then sync again"
+    Print
+    Exit Sub
+  End If
+
   payload$ = Chr$(6) + U32ToLE$(epochVal)
   SendFrame payload$
 
@@ -1703,7 +1841,8 @@ Sub DoSyncDeviceTime
     If codeVal = 0 Then
       Print "Time sync OK"
     ElseIf codeVal = 1 Then
-      Print "Time sync ERROR"
+      Print "Time sync refused: radio clock is already later than the Pico clock"
+      Print "Radio time unchanged (the radio does not move its clock backwards)"
     Else
       Print "Unexpected response code: "; codeVal
     End If
@@ -2637,6 +2776,7 @@ Sub DoSendMessage
 
   prefix$ = PubKeyPrefix6$(contactPubKey$(idxVal))
   epochVal = Int(DateTimeToUnix(Date$, Time$))
+  If PicoClockValid() = 0 Then Print "Warning: Pico clock not set; message timestamp will be wrong"
 
   txtTypeVal = 0
   attemptVal = 0
