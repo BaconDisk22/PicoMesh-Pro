@@ -35,7 +35,10 @@ MAX_CONTACTS = 320
 CONTACT_SYNC_QUIET_LIMIT = 3
 ASYNC_STREAK_LIMIT = 20
 POLL_QUIET_LIMIT = 6
-CONTACT_MSG_MIN_LEN = 17
+# Contact message layouts (MeshCore companion, 0-based offsets here).
+# code 16 (v3): prefix 4-9, timestamp 12-15, text from 16.
+# code 7 (legacy): prefix 1-6, timestamp 9-12, text from 13.
+CONTACT_MSG_LAYOUT = {16: (4, 12, 16), 7: (1, 9, 13)}
 
 
 def u32le(value: int) -> bytes:
@@ -57,11 +60,13 @@ def contact_frame(pubkey: bytes, name: str, contact_type: int = 1) -> bytes:
 
 def contact_message_frame(sender_prefix: bytes, text: str, ts: int = 1_790_000_000,
                           v3: bool = False) -> bytes:
-    """Contact message frame: sender prefix at bytes 5-10, ts at 13-16, text at 17."""
-    frame = bytearray(16)
-    frame[0] = RESP_CONTACT_MSG_V3 if v3 else RESP_CONTACT_MSG
-    frame[4:10] = sender_prefix[:6]
-    frame[12:16] = u32le(ts)
+    """Contact message frame in the firmware's v3 (code 16) or legacy (code 7) layout."""
+    code = RESP_CONTACT_MSG_V3 if v3 else RESP_CONTACT_MSG
+    key, ts_at, text_at = CONTACT_MSG_LAYOUT[code]
+    frame = bytearray(text_at)
+    frame[0] = code
+    frame[key:key + 6] = sender_prefix[:6]
+    frame[ts_at:ts_at + 4] = u32le(ts)
     return bytes(frame) + text.encode("ascii")
 
 
@@ -272,10 +277,22 @@ def find_contact_name(contacts: list, prefix_hex: str) -> str:
 
 def contact_message_sender(frame: bytes, contacts: list) -> Optional[str]:
     """Sender name as ParseContactMessageFrame resolves it, or None if too short."""
-    if len(frame) < CONTACT_MSG_MIN_LEN:
+    key, _, text_at = _layout(frame)
+    if len(frame) < text_at + 1:  # MMBasic: If Len(a$) < textStart (1-based)
         return None
-    return find_contact_name(contacts, frame[4:10].hex().upper())
+    return find_contact_name(contacts, frame[key:key + 6].hex().upper())
+
+
+def _layout(frame: bytes):
+    """Mirror of ParseContactMessageFrame: code 16 is v3, anything else legacy."""
+    return CONTACT_MSG_LAYOUT[RESP_CONTACT_MSG_V3 if frame[:1] == bytes([RESP_CONTACT_MSG_V3]) else RESP_CONTACT_MSG]
 
 
 def contact_message_text(frame: bytes) -> str:
-    return frame[16:].split(b"\x00", 1)[0].decode("ascii", "replace")
+    _, _, text_at = _layout(frame)
+    return frame[text_at:].split(b"\x00", 1)[0].decode("ascii", "replace")
+
+
+def contact_message_timestamp(frame: bytes) -> int:
+    _, ts_at, _ = _layout(frame)
+    return int.from_bytes(frame[ts_at:ts_at + 4], "little")

@@ -65,9 +65,17 @@ class SourceAnchorTests(unittest.TestCase):
         self.assertEqual(codes, sorted([ref.RESP_CONTACT_MSG, ref.RESP_CHANNEL_MSG,
                                         ref.RESP_CONTACT_MSG_V3, ref.RESP_CHANNEL_MSG_V3]))
         msg = body("Sub ParseContactMessageFrame", "End Sub")
-        self.assertIn(f"If Len(a$) < {ref.CONTACT_MSG_MIN_LEN} Then", msg)
-        self.assertIn("For i = 5 To 10", msg)
-        self.assertIn("For i = 17 To Len(a$)", msg)
+        # Audit R8: offsets per layout, checked against MeshCore 81dbae5.
+        v3 = msg[msg.index("If codeVal = 16 Then"):msg.index("  Else\n    keyStart = 2")]
+        legacy = msg[msg.index("  Else\n    keyStart = 2"):msg.index("If Len(a$) < textStart Then")]
+        for block, layout in ((v3, ref.CONTACT_MSG_LAYOUT[16]), (legacy, ref.CONTACT_MSG_LAYOUT[7])):
+            key, ts_at, text_at = layout
+            self.assertIn(f"keyStart = {key + 1}", block)
+            self.assertIn(f"tsStart = {ts_at + 1}", block)
+            self.assertIn(f"textStart = {text_at + 1}", block)
+        self.assertIn("For i = keyStart To keyStart + 5", msg)
+        self.assertIn("For i = textStart To Len(a$)", msg)
+        self.assertIn("tsVal = U32LEVal(a$, tsStart)", msg)
 
 
 class ContactSyncScenarioTests(unittest.TestCase):
@@ -232,7 +240,20 @@ class MessagePollScenarioTests(unittest.TestCase):
     def test_unknown_sender_and_short_frame(self):
         msg = ref.contact_message_frame(b"\x99" * 6, "who")
         self.assertEqual(ref.contact_message_sender(msg, self.contacts), "(unknown)")
-        self.assertIsNone(ref.contact_message_sender(msg[:16], self.contacts))
+        self.assertIsNone(ref.contact_message_sender(msg[:13], self.contacts))  # legacy header is 13 bytes
+
+    def test_legacy_and_v3_frames_resolve_same_sender_text_and_time(self):
+        for v3 in (False, True):
+            msg = ref.contact_message_frame(key(0xA1)[:6], "net check", ts=1_790_000_042, v3=v3)
+            self.assertEqual(ref.contact_message_sender(msg, self.contacts), "Alice", v3)
+            self.assertEqual(ref.contact_message_text(msg), "net check", v3)
+            self.assertEqual(ref.contact_message_timestamp(msg), 1_790_000_042, v3)
+
+    def test_legacy_frame_keeps_first_three_characters(self):
+        # Before R8 the legacy frame was read with v3 offsets and lost 3 chars.
+        msg = ref.contact_message_frame(key(0xB2)[:6], "abcdef")
+        self.assertEqual(len(msg), 13 + 6)
+        self.assertEqual(ref.contact_message_text(msg), "abcdef")
 
     def test_text_stops_at_nul(self):
         msg = ref.contact_message_frame(key(0xA1)[:6], "visible") + b"\x00hidden"

@@ -49,6 +49,18 @@ class SourceAnchorTests(unittest.TestCase):
         for pos in readers:
             self.assertTrue(any(lo <= pos < hi for lo, hi in spans), SOURCE[pos - 80:pos + 20])
 
+    def test_channel_queries_flush_stale_replies_first(self):
+        # Audit R7: each slot query starts from an empty input buffer.
+        for name in ("Sub ReadRadioChannelAt", "Sub DoSyncRadioChannels"):
+            b = body(name, "End Sub")
+            self.assertLess(b.index("FlushInput"), b.index("SendFrame Chr$(31) + Chr$(idxVal)"), name)
+
+    def test_channel_import_reports_every_skip_reason(self):
+        b = body("Sub DoSyncRadioChannels", "End Sub")
+        for counter in ("noReply", "rejected", "badReply", "listFull", "skipped"):
+            self.assertIn(f"{counter} = {counter} + 1", b)
+            self.assertRegex(b, rf'Print "[^"]+"; {counter}\n')
+
     def test_channel_send_layout_and_codes(self):
         b = body("Sub DoSendChannelMessage", "End Sub")
         self.assertIn(f"payload$ = payload$ + Chr${'('}{ch.CMD_SEND_CHANNEL_MSG})", b)

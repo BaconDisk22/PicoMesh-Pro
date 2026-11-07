@@ -236,6 +236,8 @@ Sub ReadRadioChannelAt(idxVal)
   Local name$
   Local b$
 
+  ' Drop any late reply to an earlier query so it is not taken for this one.
+  FlushInput
   SendFrame Chr$(31) + Chr$(idxVal)
   frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
   If frame$ = "" Then
@@ -288,6 +290,10 @@ Sub DoSyncRadioChannels
   Local added
   Local skipped
   Local validName
+  Local noReply
+  Local rejected
+  Local badReply
+  Local listFull
 
   Print "Import radio channel names (slots 0-7)"
   Print "This may replace names in your local channel list"
@@ -301,51 +307,65 @@ Sub DoSyncRadioChannels
   updated = 0
   added = 0
   skipped = 0
+  noReply = 0
+  rejected = 0
+  badReply = 0
+  listFull = 0
 
   For idxVal = 0 To 7
+    ' Drop any late reply to the previous slot before asking for this one.
+    FlushInput
     SendFrame Chr$(31) + Chr$(idxVal)
     frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
-    If frame$ <> "" Then
+    If frame$ = "" Then
+      noReply = noReply + 1
+    Else
       codeVal = Asc(Left$(frame$, 1))
-      If codeVal = 18 And Len(frame$) >= 50 Then
-        If Asc(Mid$(frame$, 2, 1)) = idxVal Then
-          name$ = ""
-          For j = 3 To 34
-            b$ = Mid$(frame$, j, 1)
-            If b$ = Chr$(0) Then Exit For
-            name$ = name$ + b$
-          Next j
+      If codeVal = 1 Then
+        rejected = rejected + 1
+      ElseIf codeVal <> 18 Or Len(frame$) < 50 Then
+        badReply = badReply + 1
+      ElseIf Asc(Mid$(frame$, 2, 1)) <> idxVal Then
+        badReply = badReply + 1
+      Else
+        name$ = ""
+        For j = 3 To 34
+          b$ = Mid$(frame$, j, 1)
+          If b$ = Chr$(0) Then Exit For
+          name$ = name$ + b$
+        Next j
 
-          validName = 1
-          If name$ = "" Then validName = 0
-          For j = 1 To Len(name$)
-            If Asc(Mid$(name$, j, 1)) < 32 Or Asc(Mid$(name$, j, 1)) = 127 Then validName = 0
-            If Mid$(name$, j, 1) = "|" Then validName = 0
-          Next j
+        validName = 1
+        If name$ = "" Then validName = 0
+        For j = 1 To Len(name$)
+          If Asc(Mid$(name$, j, 1)) < 32 Or Asc(Mid$(name$, j, 1)) = 127 Then validName = 0
+          If Mid$(name$, j, 1) = "|" Then validName = 0
+        Next j
 
-          If idxVal = 0 And name$ <> "#public" Then validName = 0
-          If idxVal <> 0 And name$ = "#public" Then validName = 0
+        If idxVal = 0 And name$ <> "#public" Then validName = 0
+        If idxVal <> 0 And name$ = "#public" Then validName = 0
 
-          If validName = 1 Then
-            found = 0
-            For i = 1 To channelCount
-              If channelIdx(i) = idxVal Then
-                channelName$(i) = name$
-                found = 1
-                updated = updated + 1
-                Exit For
-              End If
-            Next i
-            If found = 0 And channelCount < MAX_CHANNELS Then
-              channelCount = channelCount + 1
-              channelIdx(channelCount) = idxVal
-              channelName$(channelCount) = name$
-              added = added + 1
+        If validName = 1 Then
+          found = 0
+          For i = 1 To channelCount
+            If channelIdx(i) = idxVal Then
+              channelName$(i) = name$
+              found = 1
+              updated = updated + 1
+              Exit For
             End If
-          Else
-            skipped = skipped + 1
-            Print "Skipped invalid/empty name at slot "; idxVal
+          Next i
+          If found = 0 And channelCount < MAX_CHANNELS Then
+            channelCount = channelCount + 1
+            channelIdx(channelCount) = idxVal
+            channelName$(channelCount) = name$
+            added = added + 1
+          ElseIf found = 0 Then
+            listFull = listFull + 1
           End If
+        Else
+          skipped = skipped + 1
+          Print "Skipped invalid/empty name at slot "; idxVal
         End If
       End If
     End If
@@ -354,6 +374,10 @@ Sub DoSyncRadioChannels
   Print "Updated existing: "; updated
   Print "Added channels:   "; added
   Print "Invalid names skipped: "; skipped
+  Print "No reply:         "; noReply
+  Print "Radio rejected:   "; rejected
+  Print "Bad/mismatched reply: "; badReply
+  Print "Local list full:  "; listFull
   Print "Local names only; radio configuration unchanged"
   Print "Changes are not saved across restarts"
   Print
@@ -1046,8 +1070,11 @@ Sub ParseContactMessageFrame(a$)
   Local tsVal
   Local senderKey$
   Local senderName$
+  Local keyStart
+  Local tsStart
+  Local textStart
 
-  If Len(a$) < 17 Then
+  If Len(a$) < 1 Then
     Print "Contact message frame too short"
     Print
     Exit Sub
@@ -1055,15 +1082,36 @@ Sub ParseContactMessageFrame(a$)
 
   codeVal = Asc(Mid$(a$, 1, 1))
 
+  ' Layouts (MeshCore companion, 1-based):
+  '   code 16 (v3): code, SNR, 2 reserved, sender prefix 5-10,
+  '                 path len 11, text type 12, timestamp 13-16, text 17+
+  '   code 7 (legacy): code, sender prefix 2-7, path len 8,
+  '                 text type 9, timestamp 10-13, text 14+
+  If codeVal = 16 Then
+    keyStart = 5
+    tsStart = 13
+    textStart = 17
+  Else
+    keyStart = 2
+    tsStart = 10
+    textStart = 14
+  End If
+
+  If Len(a$) < textStart Then
+    Print "Contact message frame too short"
+    Print
+    Exit Sub
+  End If
+
   headerHex$ = ""
-  For i = 2 To 16
+  For i = 2 To textStart - 1
     b = Asc(Mid$(a$, i, 1))
     headerHex$ = headerHex$ + Right$("0" + Hex$(b), 2)
-    If i < 16 Then headerHex$ = headerHex$ + " "
+    If i < textStart - 1 Then headerHex$ = headerHex$ + " "
   Next i
 
   senderKey$ = ""
-  For i = 5 To 10
+  For i = keyStart To keyStart + 5
     b = Asc(Mid$(a$, i, 1))
     senderKey$ = senderKey$ + Right$("0" + Hex$(b), 2)
   Next i
@@ -1071,7 +1119,7 @@ Sub ParseContactMessageFrame(a$)
   senderName$ = FindContactName$(senderKey$)
 
   msgText$ = ""
-  For i = 17 To Len(a$)
+  For i = textStart To Len(a$)
     b = Asc(Mid$(a$, i, 1))
     If b = 0 Then Exit For
     msgText$ = msgText$ + Chr$(b)
@@ -1087,7 +1135,7 @@ Sub ParseContactMessageFrame(a$)
 
   Print "Header:       "; headerHex$
 
-  tsVal = U32LEVal(a$, 13)
+  tsVal = U32LEVal(a$, tsStart)
   If tsVal > 1500000000 And tsVal < 2200000000 Then
     Print "Time guess:   "; UnixToDate$(Int(tsVal))
   End If
