@@ -21,7 +21,7 @@ START = bytes([ref.RESP_CONTACTS_START]) + ref.u32le(3)
 END = bytes([ref.RESP_END_OF_CONTACTS]) + ref.u32le(1_790_000_123)
 ALICE = ref.contact_frame(key(0xA1), "Alice", 1)
 BOB = ref.contact_frame(key(0xB2), "Bob", 1)
-ROOM = ref.contact_frame(key(0xC3), "Room", ref.CONTACT_TYPE_ROOM)
+REPEATER = ref.contact_frame(key(0xC3), "Repeater", ref.CONTACT_TYPE_REPEATER)
 
 
 class SourceAnchorTests(unittest.TestCase):
@@ -66,8 +66,8 @@ class SourceAnchorTests(unittest.TestCase):
 
 
 class ContactSyncScenarioTests(unittest.TestCase):
-    def test_clean_sync_excludes_rooms_from_sendable(self):
-        r = ref.sync_contacts([START, ALICE, BOB, ROOM, END])
+    def test_clean_sync_excludes_repeaters_from_sendable(self):
+        r = ref.sync_contacts([START, ALICE, BOB, REPEATER, END])
         self.assertTrue(r.completed)
         self.assertEqual((r.expected, r.received), (3, 3))
         self.assertEqual([c.name for c in r.sendable], ["Alice", "Bob"])
@@ -75,7 +75,7 @@ class ContactSyncScenarioTests(unittest.TestCase):
 
     def test_async_frames_interleaved_do_not_lose_contacts(self):
         noise = ref.async_frame(0x83)
-        r = ref.sync_contacts([START, noise, ALICE, noise, noise, BOB, noise, ROOM, END])
+        r = ref.sync_contacts([START, noise, ALICE, noise, noise, BOB, noise, REPEATER, END])
         self.assertTrue(r.completed)
         self.assertEqual(len(r.contacts), 3)
 
