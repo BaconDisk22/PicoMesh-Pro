@@ -13,7 +13,7 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 
 | ID | Severity | Area | Finding | Basis |
 | --- | --- | --- | --- | --- |
-| R1 | High | Send | Long messages crash the program (string over 255 chars) | MMBasic |
+| R1 | High | Send | Long messages crash the program (string over 255 chars). **Fixed in source; hardware check pending** | MMBasic |
 | R2 | High | Send | "Delivered" can be shown for a different message | Protocol |
 | R3 | Medium | Contacts | Contacts re-sync before every read and send | Code fact |
 | R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync | MMBasic |
@@ -38,7 +38,9 @@ MMBasic strings hold at most 255 characters, and building a longer one stops the
 
 When it fails, the program stops at the MMBasic prompt with the UART still open, and the menu is gone.
 
-**Proposed fix:** cap direct text at 239 and channel text at 245, or lower if the companion firmware has a smaller text limit (check `MAX_TEXT_LEN` in the firmware). Base the check on the 255-char string limit, not `MAX_FRAME_LEN`. Add source-anchor tests for both caps.
+**Status:** fixed in source. Text is now capped at 239 (direct) and 245 (channel), and `SendFrame` rejects payloads over 252 (`MAX_SEND_PAYLOAD`). `tests/test_string_length_safety.py` checks every input length 0–255. Still to confirm on hardware: a 239-char direct message and a 245-char channel message send without error, and the companion firmware's own text limit.
+
+**Original proposed fix:** cap direct text at 239 and channel text at 245, or lower if the companion firmware has a smaller text limit (check `MAX_TEXT_LEN` in the firmware). Base the check on the 255-char string limit, not `MAX_FRAME_LEN`. Add source-anchor tests for both caps.
 
 ### R2 — "Delivered" can belong to a different message (High, Protocol)
 

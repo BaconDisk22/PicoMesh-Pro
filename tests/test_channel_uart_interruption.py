@@ -32,7 +32,7 @@ class SourceAnchorTests(unittest.TestCase):
         b = body("Sub DoSendChannelMessage", "End Sub")
         self.assertIn(f"payload$ = payload$ + Chr${'('}{ch.CMD_SEND_CHANNEL_MSG})", b)
         self.assertIn("payload$ = payload$ + Chr$(channelIdx(idxVal))", b)
-        self.assertIn(f"If Len(msgText$) > MAX_FRAME_LEN - {ch.CHANNEL_SEND_OVERHEAD} Then", b)
+        self.assertIn(f"If Len(msgText$) > MAX_SEND_PAYLOAD - {ch.CHANNEL_SEND_OVERHEAD} Then", b)
         self.assertIn("ReadResponseSkippingAsync$(FRAME_TIMEOUT)", b)
         for code in (RESP_OK, RESP_ERR, RESP_SENT):
             self.assertIn(f"codeVal = {code} Then", b)
@@ -125,8 +125,9 @@ class ChannelSendTests(unittest.TestCase):
         self.assertEqual(ch.channel_send_payload(0, 1, "x")[2], 0)
 
     def test_frame_bound(self):
-        limit = ch.MAX_FRAME_LEN - ch.CHANNEL_SEND_OVERHEAD
-        self.assertEqual(len(ch.channel_send_payload(1, 1, "a" * limit)), ch.MAX_FRAME_LEN)
+        limit = ch.MAX_SEND_PAYLOAD - ch.CHANNEL_SEND_OVERHEAD
+        self.assertEqual(limit, 245)
+        self.assertEqual(len(ch.channel_send_payload(1, 1, "a" * limit)), ch.MAX_SEND_PAYLOAD)
         self.assertIsNone(ch.channel_send_payload(1, 1, "a" * (limit + 1)))
         self.assertIsNone(ch.channel_send_payload(1, 1, ""))
 

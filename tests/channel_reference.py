@@ -25,6 +25,8 @@ def async_frame(code: int = 0x88) -> bytes:
     return bytes([code, 0])
 
 MAX_FRAME_LEN = 1024
+MAX_STRING_LEN = 255  # MMBasic string limit
+MAX_SEND_PAYLOAD = MAX_STRING_LEN - 3  # SendFrame adds a 3-byte header
 RADIO_START = 0x3E  # '>'
 CMD_SEND_CHANNEL_MSG = 3
 CMD_GET_CHANNEL = 31
@@ -78,7 +80,7 @@ def frame(payload: bytes) -> bytes:
 def channel_send_payload(channel_idx: int, epoch: int, text: str) -> Optional[bytes]:
     """Mirror of the payload DoSendChannelMessage builds; None if rejected locally."""
     data = text.encode("ascii")
-    if not data or len(data) > MAX_FRAME_LEN - CHANNEL_SEND_OVERHEAD:
+    if not data or len(data) > MAX_SEND_PAYLOAD - CHANNEL_SEND_OVERHEAD:
         return None
     return bytes([CMD_SEND_CHANNEL_MSG, 0, channel_idx]) + u32le(epoch) + data
 

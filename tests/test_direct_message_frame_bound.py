@@ -9,10 +9,10 @@ class DirectMessageFrameTests(unittest.TestCase):
         start = SOURCE.index("Sub DoSendMessage")
         end = SOURCE.index("End Sub", start)
         body = SOURCE[start:end]
-        guard = "If Len(msgText$) > MAX_FRAME_LEN - 13 Then"
+        guard = "If Len(msgText$) > MAX_SEND_PAYLOAD - 13 Then"
         self.assertIn(guard, body)
         self.assertLess(body.index(guard), body.index("payload$ = payload$ + msgText$"))
-        self.assertIn('Print "Maximum text bytes: "; MAX_FRAME_LEN - 13', body)
+        self.assertIn('Print "Maximum text bytes: "; MAX_SEND_PAYLOAD - 13', body)
         self.assertIn("Exit Sub", body[body.index(guard):body.index("prefix$ = PubKeyPrefix6$")])
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ def routine(name):
 class UartAndBackupSafetyTests(unittest.TestCase):
     def test_uart_frame_length_limit(self):
         body = routine("Sub SendFrame(")
-        self.assertIn("MAX_FRAME_LEN", body)
+        self.assertIn("Len(payload$) > MAX_SEND_PAYLOAD", body)
         self.assertIn("Print #1", body)
 
     def test_uart_read_length_limit(self):
