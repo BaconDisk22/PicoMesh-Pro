@@ -34,6 +34,11 @@ Const MAX_FRAME_LEN = 1024
 Const MAX_STRING_LEN = 255
 Const MAX_SEND_PAYLOAD = MAX_STRING_LEN - 3
 
+' Delivery-confirmation wait for direct messages. The radio's estimated
+' timeout from RESP_CODE_SENT is used, clamped to this range.
+Const SEND_CONFIRM_MIN_MS = 2000
+Const SEND_CONFIRM_MAX_MS = 15000
+
 Const MAX_CONTACTS = 320
 
 Dim contactName$(MAX_CONTACTS)
@@ -2574,6 +2579,8 @@ Sub DoSendMessage
   Local doneFlag
   Local queuedOk
   Local deliveredOk
+  Local ackKey$
+  Local waitMs
 
   EnsureContactsLoaded
 
@@ -2650,6 +2657,8 @@ Sub DoSendMessage
   doneFlag = 0
   queuedOk = 0
   deliveredOk = 0
+  ackKey$ = ""
+  waitMs = SEND_CONFIRM_MIN_MS
 
   Do While doneFlag = 0
     frame$ = ReadResponseSkippingAsync$(FRAME_TIMEOUT)
@@ -2663,10 +2672,10 @@ Sub DoSendMessage
     codeVal = Asc(Mid$(frame$, 1, 1))
 
     If codeVal = 0 Then
-      Print "Send OK"
-      DumpHex frame$
-      queuedOk = 1
-      doneFlag = 1
+      ' No ACK code is returned with a plain OK, so delivery cannot be tracked.
+      Print "Send OK (delivery not tracked)"
+      Print
+      Exit Sub
 
     ElseIf codeVal = 1 Then
       Print "Send FAILED"
@@ -2675,10 +2684,24 @@ Sub DoSendMessage
       Exit Sub
 
     ElseIf codeVal = 6 Then
-      Print "Send queued OK"
-      DumpHex frame$
+      ' RESP_CODE_SENT: code, flood flag, expected ACK (4), est. timeout ms (4)
       queuedOk = 1
       doneFlag = 1
+      If Len(frame$) >= 10 Then
+        If Asc(Mid$(frame$, 2, 1)) = 1 Then
+          Print "Send queued OK (flood route)"
+        Else
+          Print "Send queued OK (direct route)"
+        End If
+        ackKey$ = Mid$(frame$, 3, 4)
+        waitMs = U32LEVal(frame$, 7)
+        If waitMs < SEND_CONFIRM_MIN_MS Then waitMs = SEND_CONFIRM_MIN_MS
+        If waitMs > SEND_CONFIRM_MAX_MS Then waitMs = SEND_CONFIRM_MAX_MS
+      Else
+        Print "Send queued OK (short response; delivery not tracked)"
+        Print
+        Exit Sub
+      End If
 
     Else
       Print "Unexpected send response: "; codeVal
@@ -2689,7 +2712,8 @@ Sub DoSendMessage
   Loop
 
   If queuedOk = 1 Then
-    deliveredOk = WaitForSendConfirmation(2000)
+    Print "Waiting up to "; Int(waitMs / 1000); " s for delivery..."
+    deliveredOk = WaitForSendConfirmation(waitMs, ackKey$)
 
     If deliveredOk = 0 Then
       Print "Queued, no delivery confirmation yet"
@@ -2698,13 +2722,16 @@ Sub DoSendMessage
   End If
 End Sub
 
-Function WaitForSendConfirmation(timeoutMs)
+' Wait for PUSH_CODE_SEND_CONFIRMED whose ACK code matches ackKey$.
+' Push layout: code 130, ACK code (4), round-trip ms (4). Confirmations
+' for other (earlier) messages are reported and ignored.
+Function WaitForSendConfirmation(timeoutMs, ackKey$)
   Local frame$
   Local codeVal
   Local t0
   Local asyncCount
 
-  If timeoutMs <= 0 Then
+  If timeoutMs <= 0 Or Len(ackKey$) <> 4 Then
     WaitForSendConfirmation = 0
     Exit Function
   End If
@@ -2718,11 +2745,23 @@ Function WaitForSendConfirmation(timeoutMs)
     If frame$ <> "" Then
       codeVal = Asc(Mid$(frame$, 1, 1))
 
-      If codeVal = 130 Then
+      If codeVal = 130 And Len(frame$) >= 5 And Mid$(frame$, 2, 4) = ackKey$ Then
         Print "Delivered"
-        DumpHex frame$
+        If Len(frame$) >= 9 Then
+          Print "Round trip:    "; Int(U32LEVal(frame$, 6)); " ms"
+        End If
+        Print
         WaitForSendConfirmation = 1
         Exit Function
+
+      ElseIf codeVal = 130 Then
+        Print "Ignored delivery confirmation for an earlier message"
+        asyncCount = asyncCount + 1
+        If asyncCount >= 20 Then
+          Print "Send confirmation interrupted by continuous async traffic"
+          WaitForSendConfirmation = 0
+          Exit Function
+        End If
 
       ElseIf codeVal >= 128 Then
         HandleAsyncFrame frame$

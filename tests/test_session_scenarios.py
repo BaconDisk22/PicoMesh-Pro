@@ -46,7 +46,12 @@ class SourceAnchorTests(unittest.TestCase):
         self.assertIn(f"ElseIf codeVal = {ref.RESP_SENT} Then", b)
         self.assertIn("delivery status unknown (do not retry blindly)", b)
         confirm = body("Function WaitForSendConfirmation", "End Function")
-        self.assertIn(f"If codeVal = {ref.PUSH_SEND_CONFIRMED} Then", confirm)
+        self.assertIn(f"If codeVal = {ref.PUSH_SEND_CONFIRMED} And Len(frame$) >= 5 And Mid$(frame$, 2, 4) = ackKey$ Then", confirm)
+        self.assertIn("ackKey$ = Mid$(frame$, 3, 4)", b)
+        self.assertIn("waitMs = U32LEVal(frame$, 7)", b)
+        self.assertIn(f"Const SEND_CONFIRM_MIN_MS = {ref.SEND_CONFIRM_MIN_MS}", SOURCE)
+        self.assertIn(f"Const SEND_CONFIRM_MAX_MS = {ref.SEND_CONFIRM_MAX_MS}", SOURCE)
+        self.assertIn("frame$ = ReadFrame$(300)", confirm)
         self.assertIn(f"If asyncCount >= {ref.ASYNC_STREAK_LIMIT} Then", confirm)
         skip = body("Function ReadResponseSkippingAsync$", "End Function")
         self.assertIn(f"If asyncCount >= {ref.ASYNC_STREAK_LIMIT} Then", skip)
@@ -121,15 +126,20 @@ class ContactSyncScenarioTests(unittest.TestCase):
 
 
 class DirectSendScenarioTests(unittest.TestCase):
+    ACK = b"\x11\x22\x33\x44"
+    OTHER_ACK = b"\x99\x88\x77\x66"
     OK = bytes([ref.RESP_OK])
-    SENT = bytes([ref.RESP_SENT, 0, 1, 2, 3])
-    CONFIRM = bytes([ref.PUSH_SEND_CONFIRMED, 1, 2, 3, 4])
+    SENT = ref.sent_frame(ACK, est_timeout_ms=3000)
+    CONFIRM = ref.confirm_frame(ACK)
 
     def test_queued_then_delivered(self):
         self.assertEqual(ref.direct_send_outcome([self.SENT, None, self.CONFIRM]), "delivered")
 
-    def test_ok_without_confirmation_is_reported_unconfirmed(self):
-        self.assertEqual(ref.direct_send_outcome([self.OK]), "queued-unconfirmed")
+    def test_plain_ok_is_untracked(self):
+        self.assertEqual(ref.direct_send_outcome([self.OK, self.CONFIRM]), "untracked")
+
+    def test_short_sent_frame_is_untracked(self):
+        self.assertEqual(ref.direct_send_outcome([self.SENT[:5], self.CONFIRM]), "untracked")
 
     def test_async_before_response_is_skipped(self):
         replies = [ref.async_frame(0x88)] * 5 + [self.SENT, self.CONFIRM]
@@ -157,6 +167,34 @@ class DirectSendScenarioTests(unittest.TestCase):
     def test_late_confirmation_after_window_is_unconfirmed(self):
         replies = [self.SENT] + [None] * 7 + [self.CONFIRM]
         self.assertEqual(ref.direct_send_outcome(replies, confirm_polls=7), "queued-unconfirmed")
+
+    # Audit R2: a confirmation for an earlier message must not count.
+    def test_confirmation_for_other_message_is_not_delivery(self):
+        replies = [self.SENT, ref.confirm_frame(self.OTHER_ACK)]
+        self.assertEqual(ref.direct_send_outcome(replies), "queued-unconfirmed")
+
+    def test_matching_confirmation_after_stale_one_is_delivery(self):
+        replies = [self.SENT, ref.confirm_frame(self.OTHER_ACK), None, self.CONFIRM]
+        self.assertEqual(ref.direct_send_outcome(replies), "delivered")
+
+    def test_truncated_confirmation_is_not_delivery(self):
+        replies = [self.SENT, self.CONFIRM[:4]]
+        self.assertEqual(ref.direct_send_outcome(replies), "queued-unconfirmed")
+
+    def test_ack_bytes_containing_nul_still_match(self):
+        ack = b"\x00\x01\x00\x02"
+        self.assertEqual(ref.direct_send_outcome([ref.sent_frame(ack), ref.confirm_frame(ack)]), "delivered")
+
+    # Audit R11: wait window follows the radio's estimate, clamped.
+    def test_wait_window_uses_radio_estimate_with_clamp(self):
+        self.assertEqual(ref.confirm_wait_ms(ref.sent_frame(self.ACK, 500)), ref.SEND_CONFIRM_MIN_MS)
+        self.assertEqual(ref.confirm_wait_ms(ref.sent_frame(self.ACK, 9000)), 9000)
+        self.assertEqual(ref.confirm_wait_ms(ref.sent_frame(self.ACK, 120000)), ref.SEND_CONFIRM_MAX_MS)
+
+    def test_flood_confirmation_inside_longer_window_is_delivered(self):
+        sent = ref.sent_frame(self.ACK, est_timeout_ms=9000, flood=True)
+        replies = [sent] + [None] * 20 + [self.CONFIRM]  # ~6 s of silence
+        self.assertEqual(ref.direct_send_outcome(replies), "delivered")
 
 
 class MessagePollScenarioTests(unittest.TestCase):

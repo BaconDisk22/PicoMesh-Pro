@@ -14,16 +14,16 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | ID | Severity | Area | Finding | Basis |
 | --- | --- | --- | --- | --- |
 | R1 | High | Send | Long messages crash the program (string over 255 chars). **Fixed in source; hardware check pending** | MMBasic |
-| R2 | High | Send | "Delivered" can be shown for a different message | Protocol |
+| R2 | High | Send | "Delivered" can be shown for a different message. **Fixed in source; hardware check pending** | Protocol (confirmed) |
 | R3 | Medium | Contacts | Contacts re-sync before every read and send. **Fixed in source; hardware check pending** | Code fact |
 | R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync | MMBasic |
 | R5 | Medium | Startup | Unset Pico clock is pushed to the radio on every start | Code fact |
 | R6 | Medium | Radio config | Radio params and TX power are sent with no range check or confirmation | Code fact |
 | R7 | Medium | Channels | Channel scan/import: late replies cascade, and failures are silent | Code fact |
-| R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets | Protocol |
+| R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets | Protocol (confirmed) |
 | R9 | Low | UART | `MAX_FRAME_LEN = 1024` is above what an MMBasic string can hold | MMBasic |
 | R10 | Low | UART | One bad frame flushes good frames already buffered (pinned by #79) | Code fact |
-| R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded | Code fact / Protocol |
+| R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded. **Window fixed in source** | Code fact / Protocol (confirmed) |
 | R12 | Low | Reconnect | No disconnect detection or reconnect guidance | Code fact |
 | R13 | Low | Robustness | Smaller hazards: boot read loop, worst-case blocking, by-reference argument, file I/O errors | Code fact / MMBasic |
 
@@ -42,11 +42,17 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 **Original proposed fix:** cap direct text at 239 and channel text at 245, or lower if the companion firmware has a smaller text limit (check `MAX_TEXT_LEN` in the firmware). Base the check on the 255-char string limit, not `MAX_FRAME_LEN`. Add source-anchor tests for both caps.
 
+**Firmware limit (2026-11-07):** MeshCore `main` defines `MAX_TEXT_LEN` as 160 (`src/helpers/BaseChatMesh.h`) and rejects longer direct text with an error. Messages of 161–239 chars therefore get "Send FAILED" from the radio rather than a local error. A follow-up could lower the local cap to 160.
+
 ### R2 — "Delivered" can belong to a different message (High, Protocol)
 
 `WaitForSendConfirmation` treats any `PUSH_CODE_SEND_CONFIRMED` (130) as delivery of the message just sent. In the companion protocol, `RESP_CODE_SENT` (6) carries an expected ACK code, and the confirmation push carries the ACK code it is confirming. The source never compares the two. If message A's confirmation arrives late, during message B's wait, the app prints **Delivered** for B even when B was never delivered.
 
-**Proposed fix:** keep the 4-byte expected ACK from the `RESP_CODE_SENT` frame. Report "Delivered" only when the push's ACK matches, and ignore or log other confirmations. Confirm the byte offsets against the firmware first.
+**Protocol check (2026-11-07):** confirmed against MeshCore `main` at `81dbae5` (`examples/companion_radio/MyMesh.cpp`). `RESP_CODE_SENT` is 10 bytes: code, flood flag, expected ACK (4), estimated timeout in ms (4). `PUSH_CODE_SEND_CONFIRMED` is 9 bytes: code, ACK (4), round-trip ms (4). The firmware sends one push per ACK.
+
+**Status:** fixed in source. `DoSendMessage` keeps the ACK from bytes 3–6 of `RESP_CODE_SENT`, and `WaitForSendConfirmation(timeoutMs, ackKey$)` reports **Delivered** only when bytes 2–5 of the push match it. Non-matching confirmations print "Ignored delivery confirmation for an earlier message". A plain OK, or a `RESP_CODE_SENT` shorter than 10 bytes, is reported as "delivery not tracked". Covered by `DirectSendScenarioTests` in `tests/test_session_scenarios.py`.
+
+**Original proposed fix:** keep the 4-byte expected ACK from the `RESP_CODE_SENT` frame. Report "Delivered" only when the push's ACK matches, and ignore or log other confirmations. Confirm the byte offsets against the firmware first.
 
 ### R3 — Contacts re-sync before every read and send (Medium, Code fact)
 
@@ -84,7 +90,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `ParseContactMessageFrame` uses the v3 layout (sender prefix in bytes 5–10, text from byte 17) for both code 16 and code 7. In the legacy code-7 layout the prefix starts at byte 2 and the text at byte 14, so a code-7 frame would show the wrong sender and lose the first 3 characters of the text. The app asks for protocol v3 in `DEVICE_QUERY`, so current firmware should send code 16 and this path is rarely used. Channel messages already handle both layouts correctly. The #78 test helper copies the v3 layout for code 7 as well, matching the source as written.
 
-**Proposed fix:** branch on the code the same way `ParseChannelMessageFrame` does, after confirming the code-7 layout.
+**Protocol check (2026-11-07):** confirmed against MeshCore `main` at `81dbae5` (`MyMesh::queueMessage`). Code 7 is code, sender prefix (6), path length, text type, timestamp (4), then text, so the prefix is bytes 2–7 and the text starts at byte 14.
+
+**Proposed fix:** branch on the code the same way `ParseChannelMessageFrame` does.
 
 ### R9 — `MAX_FRAME_LEN` is larger than an MMBasic string (Low, MMBasic)
 
@@ -102,7 +110,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `DoSendMessage` waits a fixed 2,000 ms for delivery. `RESP_CODE_SENT` also carries an estimated timeout (Protocol), and flood-routed messages often take longer than 2 s, so "Queued, no delivery confirmation yet" will be common. Confirmations that arrive later are dropped by `HandleAsyncFrame`, or wiped by R3's flush, so the user never learns the message did arrive.
 
-**Proposed fix:** use the radio's estimated timeout, with a sensible cap. After R2 is fixed, report late matching confirmations when they are seen.
+**Status:** the wait window is fixed in source. It now uses the radio's estimated timeout, clamped to 2–15 s (`SEND_CONFIRM_MIN_MS` / `SEND_CONFIRM_MAX_MS`). Confirmations that arrive after the window are still not reported later; that part remains open.
+
+**Original proposed fix:** use the radio's estimated timeout, with a sensible cap. After R2 is fixed, report late matching confirmations when they are seen.
 
 ### R12 — No disconnect detection or reconnect guidance (Low, Code fact)
 
