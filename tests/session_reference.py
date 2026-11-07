@@ -29,7 +29,7 @@ PUSH_SEND_CONFIRMED = 130
 ASYNC_MIN = 128
 
 CONTACT_FRAME_MIN_LEN = 148
-CONTACT_TYPE_ROOM = 2  # excluded from the sendable map
+CONTACT_TYPE_REPEATER = 2  # MeshCore ADV_TYPE_REPEATER; excluded from the sendable map
 MAX_CONTACTS = 320
 
 CONTACT_SYNC_QUIET_LIMIT = 3
@@ -97,7 +97,7 @@ class ContactSyncResult:
 
     @property
     def sendable(self) -> list:
-        return [c for c in self.contacts if c.contact_type != CONTACT_TYPE_ROOM]
+        return [c for c in self.contacts if c.contact_type != CONTACT_TYPE_REPEATER]
 
 
 def parse_contact_silent(frame: bytes) -> Optional[Contact]:

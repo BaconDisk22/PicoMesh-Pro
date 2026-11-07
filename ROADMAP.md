@@ -17,6 +17,7 @@ This document separates **implemented in source** from **validated on hardware**
 ## Still required for v0.1.0-rc.1
 
 - [ ] Review current `main` and verify all intended fixes are merged
+- [ ] Resolve or explicitly accept the High findings (R1, R2) in the [reliability audit](docs/RELIABILITY_AUDIT.md)
 - [ ] Verify CI status on the exact candidate commit
 - [ ] Run PicoMite/PicoCalc + MeshCore companion hardware tests, recording firmware and wiring
 - [ ] Confirm startup, contacts, messages, channel send, backup/restore and reconnect behavior
