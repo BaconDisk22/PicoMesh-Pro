@@ -41,6 +41,18 @@ Const MAX_FRAME_LEN = MAX_STRING_LEN - 3
 ' buffer instead of discarding everything when a header turns out bad.
 Dim gRxBuf$
 
+' MeshCore companion text limit (MAX_TEXT_LEN in src/helpers/BaseChatMesh.h).
+' Direct text over this is refused by the radio. Channel text is cut by the
+' radio to this length including the "<node name>: " prefix it adds.
+Const MAX_TEXT_LEN = 160
+
+' ACK code of the last direct message still waiting for confirmation, so a
+' confirmation arriving after the wait window can still be reported.
+Dim gPendingAck$
+
+' Consecutive commands that got no response; drives the reconnect hint.
+Dim gNoReplyCount
+
 ' Delivery-confirmation wait for direct messages. The radio's estimated
 ' timeout from RESP_CODE_SENT is used, clamped to this range.
 Const SEND_CONFIRM_MIN_MS = 2000
@@ -494,6 +506,16 @@ Sub DoSendChannelMessage
   If Len(msgText$) > MAX_SEND_PAYLOAD - 7 Then
     Print "Message too long for local frame limit"
     Print "Maximum text bytes: "; MAX_SEND_PAYLOAD - 7
+    Print
+    Exit Sub
+  End If
+
+  ' The radio sends "<node name>: <text>" and silently cuts the total to
+  ' MAX_TEXT_LEN, so refuse text that would be cut.
+  If Len(msgText$) > MAX_TEXT_LEN - Len(gNodeName$) - 2 Then
+    Print "Message too long for the radio; it would be cut short"
+    Print "Maximum text bytes: "; MAX_TEXT_LEN - Len(gNodeName$) - 2
+    If gNodeName$ = "" Then Print "(node name unknown; run Initialize radio for an exact limit)"
     Print
     Exit Sub
   End If
@@ -1842,6 +1864,7 @@ Function ReadResponseSkippingAsync$(timeoutMs)
     frame$ = ReadFrame$(timeoutMs)
 
     If frame$ = "" Then
+      NoteNoReply
       ReadResponseSkippingAsync$ = ""
       Exit Function
     End If
@@ -1856,11 +1879,23 @@ Function ReadResponseSkippingAsync$(timeoutMs)
         Exit Function
       End If
     Else
+      gNoReplyCount = 0
       ReadResponseSkippingAsync$ = frame$
       Exit Function
     End If
   Loop
 End Function
+
+' After several commands in a row get no response, suggest checking the
+' radio. Printed once per run of silence.
+Sub NoteNoReply
+  gNoReplyCount = gNoReplyCount + 1
+  If gNoReplyCount = 3 Then
+    Print "The radio has not answered 3 commands in a row."
+    Print "Check power, TX/RX wiring and ground, then use"
+    Print "Device > Initialize radio to reconnect."
+  End If
+End Sub
 
 Sub DoSyncDeviceTime
   Local payload$, frame$
@@ -2090,6 +2125,7 @@ End Sub
 
 Sub HandleAsyncFrame(a$)
   Local codeVal
+  Local lateVal
 
   If Len(a$) < 1 Then Exit Sub
 
@@ -2097,7 +2133,8 @@ Sub HandleAsyncFrame(a$)
 
   Select Case codeVal
     Case 130
-      ' ignore silently
+      ' Report a late confirmation for the last unconfirmed direct message.
+      lateVal = CheckLateAck(a$)
     Case 131
       ' ignore silently
     Case 136
@@ -2106,6 +2143,17 @@ Sub HandleAsyncFrame(a$)
       ' ignore silently
   End Select
 End Sub
+
+' Report and clear gPendingAck$ when a SEND_CONFIRMED push matches it.
+Function CheckLateAck(a$)
+  CheckLateAck = 0
+  If Len(gPendingAck$) <> 4 Or Len(a$) < 5 Then Exit Function
+  If Asc(Mid$(a$, 1, 1)) <> 130 Then Exit Function
+  If Mid$(a$, 2, 4) <> gPendingAck$ Then Exit Function
+  Print "Late delivery confirmation: your last direct message was delivered"
+  gPendingAck$ = ""
+  CheckLateAck = 1
+End Function
 
 Function ReadFrame$(timeoutMs)
   Local t0
@@ -2812,6 +2860,14 @@ Sub DoSendMessage
     Exit Sub
   End If
 
+  ' The radio refuses longer direct text, so stop here with a clear reason.
+  If Len(msgText$) > MAX_TEXT_LEN Then
+    Print "Message too long for the radio"
+    Print "Maximum text bytes: "; MAX_TEXT_LEN
+    Print
+    Exit Sub
+  End If
+
   prefix$ = PubKeyPrefix6$(contactPubKey$(idxVal))
   epochVal = Int(DateTimeToUnix(Date$, Time$))
   If PicoClockValid() = 0 Then Print "Warning: Pico clock not set; message timestamp will be wrong"
@@ -2895,7 +2951,11 @@ Sub DoSendMessage
 
     If deliveredOk = 0 Then
       Print "Queued, no delivery confirmation yet"
+      Print "A later confirmation will be reported when it arrives"
       Print
+      gPendingAck$ = ackKey$
+    Else
+      gPendingAck$ = ""
     End If
   End If
 End Sub
@@ -2933,7 +2993,9 @@ Function WaitForSendConfirmation(timeoutMs, ackKey$)
         Exit Function
 
       ElseIf codeVal = 130 Then
-        Print "Ignored delivery confirmation for an earlier message"
+        If CheckLateAck(frame$) = 0 Then
+          Print "Ignored delivery confirmation for an earlier message"
+        End If
         asyncCount = asyncCount + 1
         If asyncCount >= 20 Then
           Print "Send confirmation interrupted by continuous async traffic"

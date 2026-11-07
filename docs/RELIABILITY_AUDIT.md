@@ -23,8 +23,8 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets. **Fixed in source** | Protocol (confirmed) |
 | R9 | Low | UART | `MAX_FRAME_LEN = 1024` is above what an MMBasic string can hold. **Fixed in source** | MMBasic |
 | R10 | Low | UART | One bad frame flushes good frames already buffered (pinned by #79). **Fixed in source; hardware check pending** | Code fact |
-| R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded. **Window fixed in source** | Code fact / Protocol (confirmed) |
-| R12 | Low | Reconnect | No disconnect detection or reconnect guidance | Code fact |
+| R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded. **Fixed in source; hardware check pending** | Code fact / Protocol (confirmed) |
+| R12 | Low | Reconnect | No disconnect detection or reconnect guidance. **Fixed in source** | Code fact |
 | R13 | Low | Robustness | Smaller hazards: boot read loop, worst-case blocking, by-reference argument, file I/O errors | Code fact / MMBasic |
 
 ## Findings
@@ -43,6 +43,8 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 **Original proposed fix:** cap direct text at 239 and channel text at 245, or lower if the companion firmware has a smaller text limit (check `MAX_TEXT_LEN` in the firmware). Base the check on the 255-char string limit, not `MAX_FRAME_LEN`. Add source-anchor tests for both caps.
 
 **Firmware limit (2026-11-07):** MeshCore `main` defines `MAX_TEXT_LEN` as 160 (`src/helpers/BaseChatMesh.h`) and rejects longer direct text with an error. Messages of 161–239 chars therefore get "Send FAILED" from the radio rather than a local error. A follow-up could lower the local cap to 160.
+
+**Update:** fixed in source. A second check now refuses direct text over `MAX_TEXT_LEN` (160) with "Message too long for the radio". Channel text is checked against 160 minus the `"<node name>: "` prefix the radio adds, because the firmware cuts longer channel text silently instead of refusing it.
 
 ### R2 — "Delivered" can belong to a different message (High, Protocol)
 
@@ -126,7 +128,7 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `DoSendMessage` waits a fixed 2,000 ms for delivery. `RESP_CODE_SENT` also carries an estimated timeout (Protocol), and flood-routed messages often take longer than 2 s, so "Queued, no delivery confirmation yet" will be common. Confirmations that arrive later are dropped by `HandleAsyncFrame`, or wiped by R3's flush, so the user never learns the message did arrive.
 
-**Status:** the wait window is fixed in source. It now uses the radio's estimated timeout, clamped to 2–15 s (`SEND_CONFIRM_MIN_MS` / `SEND_CONFIRM_MAX_MS`). Confirmations that arrive after the window are still not reported later; that part remains open.
+**Status:** the wait window is fixed in source. It now uses the radio's estimated timeout, clamped to 2–15 s (`SEND_CONFIRM_MIN_MS` / `SEND_CONFIRM_MAX_MS`). Late confirmations are now reported too: the ACK of the last unconfirmed direct message is kept in `gPendingAck$`, and `CheckLateAck` prints "Late delivery confirmation" when a matching push arrives later, whether during another wait or while idle. Only the most recent unconfirmed message is tracked. A late confirmation can still be lost if a contact sync or channel scan clears the input buffer before it is read.
 
 **Original proposed fix:** use the radio's estimated timeout, with a sensible cap. After R2 is fixed, report late matching confirmations when they are seen.
 
@@ -134,7 +136,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 The port is opened once at start. If the radio resets or loses power, every command just times out with its own message, and nothing suggests **Device → Initialize radio**.
 
-**Proposed fix:** count consecutive no-response results. After about 3, print a hint to check wiring and power and run Initialize radio.
+**Status:** fixed in source. `ReadResponseSkippingAsync$`, which nearly every command uses, counts consecutive timeouts in `gNoReplyCount` and resets it on any reply. On the third timeout in a row, `NoteNoReply` suggests checking power and wiring and running **Device → Initialize radio**. An async flood does not count as silence. Contact sync and message polling use their own loops and do not feed the counter.
+
+**Original proposed fix:** count consecutive no-response results. After about 3, print a hint to check wiring and power and run Initialize radio.
 
 ### R13 — Smaller robustness notes
 
