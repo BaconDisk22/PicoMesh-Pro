@@ -17,8 +17,8 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | R2 | High | Send | "Delivered" can be shown for a different message. **Fixed in source; hardware check pending** | Protocol (confirmed) |
 | R3 | Medium | Contacts | Contacts re-sync before every read and send. **Fixed in source; hardware check pending** | Code fact |
 | R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync | MMBasic |
-| R5 | Medium | Startup | Unset Pico clock is pushed to the radio on every start | Code fact |
-| R6 | Medium | Radio config | Radio params and TX power are sent with no range check or confirmation | Code fact |
+| R5 | Medium | Startup | Unset Pico clock is pushed to the radio on every start. **Fixed in source; hardware check pending** | Code fact |
+| R6 | Medium | Radio config | Radio params and TX power are sent with no range check or confirmation. **Fixed in source; hardware check pending** | Code fact |
 | R7 | Medium | Channels | Channel scan/import: late replies cascade, and failures are silent | Code fact |
 | R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets | Protocol (confirmed) |
 | R9 | Low | UART | `MAX_FRAME_LEN = 1024` is above what an MMBasic string can hold | MMBasic |
@@ -72,13 +72,21 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `DoInitialize` runs at every start and calls `DoSyncDeviceTime`, which sends `Date$`/`Time$` to the radio with no sanity check. A PicoMite whose clock hasn't been set reports 2000-01-01. Depending on the firmware, the radio either rejects that (the user sees "Time sync ERROR" every start) or accepts it, which puts radio timestamps back to 2000. Outgoing direct and channel messages also use the Pico clock for their timestamps, so they can carry 2000-era dates either way.
 
-**Proposed fix:** skip the time sync, with a clear message, when the Pico year is before 2024. Ask before pushing a time that is earlier than the radio's current time (`DoGetDeviceTime` already reads it).
+**Firmware check (2026-11-07):** in MeshCore `main` at `81dbae5`, `CMD_SET_DEVICE_TIME` returns an error when the new time is earlier than the radio clock. An unset Pico clock is therefore refused, and the user sees an error at every start. The opposite case is the real hazard: a Pico clock set in the future *is* accepted, and the radio's clock can then never be moved back with this command.
+
+**Status:** fixed in source. `PicoClockValid()` accepts only 2024-01-01 to 2100-01-01. `DoSyncDeviceTime` skips the sync outside that window and explains how to set the Pico clock. A refused sync now says the radio clock is already later and was left unchanged. Direct and channel sends warn when the Pico clock is unset, because the message timestamp comes from it. Covered by `tests/test_clock_and_radio_params.py`. A Pico clock that is wrong but inside the window is still pushed; comparing it with the radio's time first remains a possible follow-up.
+
+**Original proposed fix:** skip the time sync, with a clear message, when the Pico year is before 2024. Ask before pushing a time that is earlier than the radio's current time (`DoGetDeviceTime` already reads it).
 
 ### R6 — Radio params and TX power: no range check or confirmation (Medium, Code fact)
 
 `DoSetRadioParams` accepts any frequency and bandwidth above 0, and sends the change right away with no confirmation. A typo such as `9150` or `91.5` reconfigures the radio, and the radio saves the setting. SF, CR and TX power are not required to be whole numbers. TX power is checked against 0–30, not against the `gMaxTxPowerVal` the radio reported. A wrong frequency can take the node off the mesh, and can mean transmitting outside the permitted band.
 
-**Proposed fix:** check frequency against the radio's band (and optionally the region), and bandwidth against the LoRa set (7.8–500 kHz). Require whole numbers for SF, CR and power, and cap power at `gMaxTxPowerVal` when it is known. Show a summary and require typing `APPLY` before sending.
+**Firmware check (2026-11-07):** MeshCore `main` already rejects frequencies outside 150–2500 MHz, bandwidths outside 7–500 kHz, SF outside 5–12 and CR outside 5–8, and caps TX power at the board maximum. Gross typos are therefore refused by the radio. What remains is an in-range mistake (for example the wrong band for the hardware), a non-standard bandwidth, fractional values and no chance to cancel.
+
+**Status:** fixed in source. Frequency and bandwidth must be plain decimal numbers; SF, CR and TX power must be whole numbers. Frequency is checked against the firmware's 150–2500 MHz range, and bandwidth against the 10 standard LoRa values. TX power is capped at the radio-reported maximum when known. Both commands show current and new values and require typing `APPLY`. Frequency and bandwidth are now rounded rather than truncated when converted to kHz/Hz. Covered by `tests/test_clock_and_radio_params.py`. There is no per-region band check.
+
+**Original proposed fix:** check frequency against the radio's band (and optionally the region), and bandwidth against the LoRa set (7.8–500 kHz). Require whole numbers for SF, CR and power, and cap power at `gMaxTxPowerVal` when it is known. Show a summary and require typing `APPLY` before sending.
 
 ### R7 — Channel scan/import: cascading mismatches, silent failures (Medium, Code fact)
 
