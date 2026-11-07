@@ -2010,6 +2010,9 @@ Sub DoGetContacts
   FlushInput
   Pause 100
 
+  ' Mark contacts unloaded until RESP_END_OF_CONTACTS arrives, so a
+  ' timed-out or interrupted sync is retried by EnsureContactsLoaded.
+  contactsLoaded = 0
   contactCount = 0
   sendableCount = 0
   recvCount = 0
@@ -2078,6 +2081,7 @@ Sub DoGetContacts
             End If
             Print
 
+            contactsLoaded = 1
             doneFlag = 1
 
           Case Else

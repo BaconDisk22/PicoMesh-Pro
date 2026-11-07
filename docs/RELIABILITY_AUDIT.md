@@ -15,7 +15,7 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | --- | --- | --- | --- | --- |
 | R1 | High | Send | Long messages crash the program (string over 255 chars) | MMBasic |
 | R2 | High | Send | "Delivered" can be shown for a different message | Protocol |
-| R3 | Medium | Contacts | Contacts re-sync before every read and send | Code fact |
+| R3 | Medium | Contacts | Contacts re-sync before every read and send. **Fixed in source; hardware check pending** | Code fact |
 | R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync | MMBasic |
 | R5 | Medium | Startup | Unset Pico clock is pushed to the radio on every start | Code fact |
 | R6 | Medium | Radio config | Radio params and TX power are sent with no range check or confirmation | Code fact |
@@ -50,7 +50,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `EnsureContactsLoaded` syncs only when `contactsLoaded = 0`, but nothing in the file ever sets `contactsLoaded` to 1. So every **Read next message** and every **Send message** runs a full `DoGetContacts` first. That costs seconds with many contacts, and each run starts with `FlushInput`, which throws away any frames already waiting, such as message-waiting pushes or late confirmations.
 
-**Proposed fix:** set `contactsLoaded = 1` only when a sync completes (`RESP_END_OF_CONTACTS` received). Leave it at 0 after a timeout or an async-flood stop, so the next operation retries.
+**Status:** fixed in source. `DoGetContacts` clears `contactsLoaded` when it starts and sets it only on `RESP_END_OF_CONTACTS`. `tests/test_contacts_loaded_flag.py` pins this. Contacts added on the radio later now need **Contacts → Refresh contacts** (they used to be picked up by the re-sync before every read and send).
+
+**Original proposed fix:** set `contactsLoaded = 1` only when a sync completes (`RESP_END_OF_CONTACTS` received). Leave it at 0 after a timeout or an async-flood stop, so the next operation retries.
 
 ### R4 — Receive buffer can overflow during contact sync (Medium, MMBasic, needs hardware)
 
