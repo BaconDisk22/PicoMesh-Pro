@@ -19,14 +19,35 @@ class SourceAnchorTests(unittest.TestCase):
         self.assertIn(f"If codeVal >= {ch.ASYNC_MIN} Then", b)
         self.assertIn(f"If asyncCount >= {ch.ASYNC_STREAK_LIMIT} Then", b)
 
-    def test_read_frame_flushes_on_every_failure_after_start_byte(self):
+    def test_read_frame_resyncs_instead_of_flushing(self):
         b = body("Function ReadFrame$(timeoutMs)", "End Function")
-        self.assertIn("If Asc(b$) = 62 Then Exit Do", b)
-        hunt, rest = b.split("If Asc(b$) = 62 Then Exit Do", 1)
-        self.assertNotIn("FlushInput", hunt)  # hunting timeout does not flush
-        self.assertEqual(rest.count("FlushInput"), 4)  # lenLo, lenHi, invalid, payload
-        self.assertIn("payloadLen = lenLo + 256 * lenHi", b)
-        self.assertIn(f"Const MAX_FRAME_LEN = {ch.MAX_FRAME_LEN}", SOURCE)
+        self.assertNotIn("FlushInput", b)
+        self.assertIn("FillRxBuf", b)
+        self.assertIn('p = InStr(gRxBuf$, ">")', b)
+        self.assertIn("payloadLen = Asc(Mid$(gRxBuf$, 2, 1)) + 256 * Asc(Mid$(gRxBuf$, 3, 1))", b)
+        invalid = b[b.index("If payloadLen <= 0 Or payloadLen > MAX_FRAME_LEN Then"):b.index("ElseIf Len(gRxBuf$) >= payloadLen + 3 Then")]
+        self.assertIn("gRxBuf$ = Mid$(gRxBuf$, 2)", invalid)
+        timeout = b[b.index("If Timer - t0 > timeoutMs Then"):]
+        self.assertIn('If Left$(gRxBuf$, 1) = ">" Then gRxBuf$ = Mid$(gRxBuf$, 2)', timeout)
+
+    def test_receive_limits_fit_mmbasic_strings(self):
+        self.assertIn("Const MAX_FRAME_LEN = MAX_STRING_LEN - 3", SOURCE)
+        self.assertEqual(ch.MAX_FRAME_LEN, 252)
+        self.assertGreaterEqual(ch.MAX_FRAME_LEN, 176)  # MeshCore MAX_FRAME_SIZE
+        fill = body("Sub FillRxBuf", "End Sub")
+        self.assertIn("If n > MAX_STRING_LEN - Len(gRxBuf$) Then n = MAX_STRING_LEN - Len(gRxBuf$)", fill)
+        self.assertIn('gRxBuf$ = ""', body("Sub FlushInput", "End Sub"))
+
+    def test_uart_opened_with_larger_receive_buffer(self):
+        self.assertIn(f'Open "COM2:115200,{ch.UART_RX_BUFFER}" As #1', SOURCE)
+        self.assertEqual(SOURCE.count("Open \"COM"), 1)
+
+    def test_only_fill_and_flush_read_the_uart_after_boot(self):
+        readers = [m.start() for m in __import__("re").finditer(r"Input\$\([^)]*#1\)", SOURCE)]
+        allowed = [body(n, "End Sub") for n in ("Sub FlushInput", "Sub FillRxBuf", "Sub ReadRawBytes")]
+        spans = [(SOURCE.index(a), SOURCE.index(a) + len(a)) for a in allowed]
+        for pos in readers:
+            self.assertTrue(any(lo <= pos < hi for lo, hi in spans), SOURCE[pos - 80:pos + 20])
 
     def test_channel_send_layout_and_codes(self):
         b = body("Sub DoSendChannelMessage", "End Sub")
@@ -53,6 +74,8 @@ class SourceAnchorTests(unittest.TestCase):
 
 
 class UartInterruptionTests(unittest.TestCase):
+    """Audit R10: bad or partial frames no longer discard later good frames."""
+
     def setUp(self):
         self.uart = ch.UartReadModel()
 
@@ -61,17 +84,15 @@ class UartInterruptionTests(unittest.TestCase):
         self.assertEqual(self.uart.read_frame(), b"\x00")
         self.assertEqual(self.uart.read_frame(), b"\x06ok")
         self.assertIsNone(self.uart.read_frame())
-        self.assertEqual(self.uart.flushes, 0)
 
-    def test_garbage_without_start_byte_times_out_without_flush(self):
+    def test_garbage_without_start_byte_is_dropped(self):
         self.uart.arrive(b"boot noise\r\n")
         self.assertIsNone(self.uart.read_frame())
-        self.assertEqual(self.uart.flushes, 0)
+        self.assertEqual(self.uart.buffer, b"")
 
-    def test_header_cut_after_start_byte_flushes(self):
+    def test_header_cut_after_start_byte_then_recovery(self):
         self.uart.arrive(b">\x05")
         self.assertIsNone(self.uart.read_frame())
-        self.assertEqual(self.uart.flushes, 1)
         self.uart.arrive(ch.frame(b"\x00"))
         self.assertEqual(self.uart.read_frame(), b"\x00")
 
@@ -81,24 +102,20 @@ class UartInterruptionTests(unittest.TestCase):
         self.uart.arrive(ch.frame(b"\x06"))
         self.assertEqual(self.uart.read_frame(), b"\x06")
 
-    def test_invalid_length_discards_following_good_frame(self):
-        # Documents current behavior: FlushInput drops bytes already buffered.
+    def test_invalid_length_keeps_following_good_frame(self):
         self.uart.arrive(b">\x00\x00" + ch.frame(b"\x00"))
-        self.assertIsNone(self.uart.read_frame())
-        self.assertIsNone(self.uart.read_frame())
-        self.assertEqual(self.uart.flushes, 1)
+        self.assertEqual(self.uart.read_frame(), b"\x00")
 
-    def test_oversized_length_discards_buffer(self):
+    def test_oversized_length_keeps_following_good_frame(self):
         self.uart.arrive(b">\x01\x04" + b"y" * 50 + ch.frame(b"\x00"))
-        self.assertIsNone(self.uart.read_frame())
-        self.assertEqual(self.uart.buffer, bytearray())
+        self.assertEqual(self.uart.read_frame(), b"\x00")
 
-    def test_stray_start_byte_in_noise_can_swallow_real_frame(self):
-        # '>' inside noise is taken as a header; the bogus length exceeds the
-        # bytes buffered, so the timeout flush also drops the real frame.
+    def test_stray_start_byte_in_noise_recovers_on_next_read(self):
+        # '>' in noise looks like a header for 64 bytes; it times out, its
+        # start byte is dropped, and the real frame is read next time.
         self.uart.arrive(b"x>\x40\x00" + ch.frame(b"\x00"))
         self.assertIsNone(self.uart.read_frame())
-        self.assertIsNone(self.uart.read_frame())
+        self.assertEqual(self.uart.read_frame(), b"\x00")
 
     def test_repeated_async_frames_then_response(self):
         self.uart.arrive(b"".join(ch.frame(async_frame()) for _ in range(5)) + ch.frame(b"\x06"))
@@ -110,8 +127,23 @@ class UartInterruptionTests(unittest.TestCase):
     def test_max_length_frame_accepted_one_over_rejected(self):
         self.uart.arrive(ch.frame(b"z" * ch.MAX_FRAME_LEN))
         self.assertEqual(len(self.uart.read_frame()), ch.MAX_FRAME_LEN)
-        self.uart.arrive(b">" + (ch.MAX_FRAME_LEN + 1).to_bytes(2, "little") + b"z" * 1025)
-        self.assertIsNone(self.uart.read_frame())
+        self.uart.arrive(b">" + (ch.MAX_FRAME_LEN + 1).to_bytes(2, "little") + b"z" * 20 + ch.frame(b"\x06"))
+        self.assertEqual(self.uart.read_frame(), b"\x06")
+
+    def test_software_buffer_never_exceeds_string_limit(self):
+        self.uart.arrive(b"".join(ch.frame(b"\x03" + b"c" * 147) for _ in range(6)))
+        frames = []
+        while (data := self.uart.read_frame()) is not None:
+            self.assertLessEqual(len(self.uart.rx), ch.MAX_STRING_LEN)
+            frames.append(data)
+        self.assertEqual(len(frames), 6)
+
+    def test_contact_burst_fits_larger_buffer_but_not_default(self):
+        burst = b"".join(ch.frame(b"\x03" + b"c" * 147) for _ in range(12))  # ~1.8 KB
+        self.assertLessEqual(len(burst), ch.UART_RX_BUFFER)
+        self.assertGreater(len(burst), 256)
+        self.uart.arrive(burst)
+        self.assertEqual(self.uart.overflowed, 0)
 
 
 class ChannelSendTests(unittest.TestCase):

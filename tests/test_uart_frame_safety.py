@@ -13,7 +13,7 @@ class UartFrameSafetyTests(unittest.TestCase):
     def test_frame_read_rejects_invalid_length(self):
         body = block("Function ReadFrame$(timeoutMs)", "End Function")
         self.assertIn("payloadLen <= 0 Or payloadLen > MAX_FRAME_LEN", body)
-        self.assertIn("FlushInput", body)
+        self.assertIn("gRxBuf$ = Mid$(gRxBuf$, 2)", body)
 
     def test_async_drain_has_bounded_loop(self):
         body = block("Sub DrainAsyncFrames", "End Sub")

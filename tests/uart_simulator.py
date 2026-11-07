@@ -5,7 +5,7 @@ and payload. This model exercises wire-format invariants independently of hardwa
 """
 from dataclasses import dataclass
 
-MAX_FRAME_LEN = 1024
+MAX_FRAME_LEN = 252  # meshcore.bas: MAX_STRING_LEN - 3
 HOST_START = b"<"
 RADIO_START = b">"
 
@@ -44,10 +44,10 @@ class StreamDecoder:
                 break
             size = int.from_bytes(self.buffer[1:3], "little")
             if size == 0 or size > MAX_FRAME_LEN:
-                # Model the source's invalid-length recovery by discarding
-                # the currently buffered bytes.
-                self.buffer.clear()
-                break
+                # Model the source's resync: drop only this start byte and
+                # rescan, keeping any good frame that follows (audit R10).
+                del self.buffer[:1]
+                continue
             if len(self.buffer) < size + 3:
                 break
             frames.append(bytes(self.buffer[3:3 + size]))
@@ -55,5 +55,6 @@ class StreamDecoder:
         return frames
 
     def timeout_or_disconnect(self):
-        """Model source FlushInput on a partial frame timeout."""
-        self.buffer.clear()
+        """Model a partial-frame timeout: the source drops only the start byte."""
+        if self.buffer[:1] == RADIO_START:
+            del self.buffer[:1]

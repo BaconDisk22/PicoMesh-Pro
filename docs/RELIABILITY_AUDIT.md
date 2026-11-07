@@ -16,13 +16,13 @@ No code is changed by this audit. Fixes are proposed as separate, small PRs (see
 | R1 | High | Send | Long messages crash the program (string over 255 chars). **Fixed in source; hardware check pending** | MMBasic |
 | R2 | High | Send | "Delivered" can be shown for a different message. **Fixed in source; hardware check pending** | Protocol (confirmed) |
 | R3 | Medium | Contacts | Contacts re-sync before every read and send. **Fixed in source; hardware check pending** | Code fact |
-| R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync | MMBasic |
+| R4 | Medium | UART | 256-byte receive buffer can overflow during contact sync. **Fixed in source; hardware check pending** | MMBasic (manual checked) |
 | R5 | Medium | Startup | Unset Pico clock is pushed to the radio on every start. **Fixed in source; hardware check pending** | Code fact |
 | R6 | Medium | Radio config | Radio params and TX power are sent with no range check or confirmation. **Fixed in source; hardware check pending** | Code fact |
 | R7 | Medium | Channels | Channel scan/import: late replies cascade, and failures are silent | Code fact |
 | R8 | Low | Messages | Legacy contact messages (code 7) are parsed with v3 offsets | Protocol (confirmed) |
-| R9 | Low | UART | `MAX_FRAME_LEN = 1024` is above what an MMBasic string can hold | MMBasic |
-| R10 | Low | UART | One bad frame flushes good frames already buffered (pinned by #79) | Code fact |
+| R9 | Low | UART | `MAX_FRAME_LEN = 1024` is above what an MMBasic string can hold. **Fixed in source** | MMBasic |
+| R10 | Low | UART | One bad frame flushes good frames already buffered (pinned by #79). **Fixed in source; hardware check pending** | Code fact |
 | R11 | Low | Send | Fixed 2 s confirmation window; late confirmations are discarded. **Window fixed in source** | Code fact / Protocol (confirmed) |
 | R12 | Low | Reconnect | No disconnect detection or reconnect guidance | Code fact |
 | R13 | Low | Robustness | Smaller hazards: boot read loop, worst-case blocking, by-reference argument, file I/O errors | Code fact / MMBasic |
@@ -66,7 +66,9 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `Open "COM2:115200" As #1` uses the default serial receive buffer, which the PicoMite manual gives as 256 bytes. At 115200 baud that fills in about 22 ms. Contact sync streams 148-byte frames back to back, and the interpreted `ReadFrame$` loop has to keep up, so a few frames arriving together are enough to overflow it. Lost bytes break framing, and then the R10 flush behavior discards more.
 
-**Proposed fix:** open the port with a larger buffer, for example `Open "COM2:115200,4096" As #1`. Check the exact syntax and the maximum size for the target firmware. During the hardware test, compare received and expected contact counts with 50+ contacts.
+**Status:** fixed in source. The port is now opened with `Open "COM2:115200,2048" As #1`. The PicoMite manual gives the form `COMn: baud, buf, ...`, with buf the receive buffer size in bytes (default 256). If a given firmware rejects 2048, use 1024, which is the manual's own example. This gives slack, not a guarantee: a full sync of 320 contacts is about 48 KB, so the reader still has to keep up. Check the contact count against the radio's total during the hardware test.
+
+**Original proposed fix:** open the port with a larger buffer, for example `Open "COM2:115200,4096" As #1`. Check the exact syntax and the maximum size for the target firmware. During the hardware test, compare received and expected contact counts with 50+ contacts.
 
 ### R5 — Unset Pico clock is pushed to the radio (Medium, Code fact)
 
@@ -106,13 +108,15 @@ When it fails, the program stops at the MMBasic prompt with the UART still open,
 
 `ReadFrame$` accepts lengths up to 1024, but `Input$(n)` and string variables are limited to 255. With a 256-byte receive buffer, a corrupt length of 256 can pass the wait loop, and the `Input$` call then stops the program. Larger lengths time out and flush, which is safe. Companion frames are much shorter in practice (172 bytes or less).
 
-**Proposed fix:** set the receive limit to 255, or to the companion's maximum frame size, and update the Python models and anchors to match.
+**Status:** fixed in source. `MAX_FRAME_LEN` is now `MAX_STRING_LEN - 3` (252), so a whole frame fits in the 255-character software buffer. That is above the companion's `MAX_FRAME_SIZE` of 176 (MeshCore `main` `81dbae5`). This had to change together with R4: once the larger buffer lets more than 255 bytes wait, a corrupt length of 256–1024 would otherwise reach a too-long `Input$`.
 
 ### R10 — One bad frame flushes good buffered frames (Low, Code fact)
 
 `ReadFrame$` calls `FlushInput` on every failure after a start byte. An invalid length, or a stray `>` in noise, therefore also drops valid frames already in the buffer. #79 pins this behavior in `test_channel_uart_interruption.py`.
 
-**Proposed fix:** on failure, drop only the bad start byte and search for the next `>`, instead of clearing the whole buffer. Update the #79 tests to assert recovery.
+**Status:** fixed in source. `ReadFrame$` now parses from a software buffer, `gRxBuf$`, filled by `FillRxBuf`. A bad length drops only the `>` and rescans. A partial frame that times out drops only its `>`, so the next read resyncs on whatever followed it. `FlushInput` is used only where the code means to discard everything (startup, contact sync, the diagnostics menu), and it clears `gRxBuf$` too. The #79 tests now assert recovery: a bad header followed by a good frame returns the good frame, and a stray `>` in noise recovers on the next read.
+
+**Remaining limit:** the frame format has no checksum. A stray `>` whose bogus length happens to be covered by bytes that have already arrived is returned as a garbage frame. Callers check response codes and lengths, but this cannot be fully excluded without a protocol change.
 
 ### R11 — Fixed confirmation window (Low)
 
