@@ -27,12 +27,19 @@ Dim gContactsSinceVal
 Dim gRunning
 Dim gLastMenu$
 
-Const MAX_FRAME_LEN = 1024
-
 ' MMBasic strings hold at most 255 characters. SendFrame joins a 3-byte
 ' header to the payload, so outgoing payloads must stay at or below 252.
 Const MAX_STRING_LEN = 255
 Const MAX_SEND_PAYLOAD = MAX_STRING_LEN - 3
+
+' Received payload limit. A whole frame (3-byte header + payload) must fit
+' in the 255-character software receive buffer gRxBuf$. MeshCore companion
+' frames are at most 176 bytes, so 252 leaves headroom.
+Const MAX_FRAME_LEN = MAX_STRING_LEN - 3
+
+' Bytes not yet parsed into a frame. ReadFrame$ resynchronises within this
+' buffer instead of discarding everything when a header turns out bad.
+Dim gRxBuf$
 
 ' Delivery-confirmation wait for direct messages. The radio's estimated
 ' timeout from RESP_CODE_SENT is used, clamped to this range.
@@ -70,9 +77,10 @@ channelCount = 1
 channelName$(1) = "#public"
 channelIdx(1) = 0
 
-' UART on PicoCalc
+' UART on PicoCalc. The second field is the receive buffer size in bytes
+' (PicoMite default 256, which a contact-sync burst can overflow).
 SetPin GP9, GP8, COM2
-Open "COM2:115200" As #1
+Open "COM2:115200,2048" As #1
 
 gRunning = 1
 gLastMenu$ = ""
@@ -2004,9 +2012,20 @@ End Sub
 
 Sub FlushInput
   Local x$
+  gRxBuf$ = ""
   Do While Loc(#1) > 0
     x$ = Input$(1, #1)
   Loop
+End Sub
+
+' Move waiting UART bytes into gRxBuf$, never past MAX_STRING_LEN.
+Sub FillRxBuf
+  Local n
+  n = Loc(#1)
+  If n > 0 And Len(gRxBuf$) < MAX_STRING_LEN Then
+    If n > MAX_STRING_LEN - Len(gRxBuf$) Then n = MAX_STRING_LEN - Len(gRxBuf$)
+    gRxBuf$ = gRxBuf$ + Input$(n, #1)
+  End If
 End Sub
 
 
@@ -2042,11 +2061,8 @@ End Sub
 
 Function ReadFrame$(timeoutMs)
   Local t0
-  Local b$
-  Local lenLo
-  Local lenHi
+  Local p
   Local payloadLen
-  Local payload$
 
   If timeoutMs <= 0 Then
     ReadFrame$ = ""
@@ -2055,65 +2071,39 @@ Function ReadFrame$(timeoutMs)
 
   t0 = Timer
 
-  ' Find frame start byte ">"
   Do
-    If Loc(#1) > 0 Then
-      b$ = Input$(1, #1)
-      If Asc(b$) = 62 Then Exit Do
+    FillRxBuf
+
+    ' Discard anything before the next frame start byte ">"
+    p = InStr(gRxBuf$, ">")
+    If p = 0 Then
+      gRxBuf$ = ""
+    ElseIf p > 1 Then
+      gRxBuf$ = Mid$(gRxBuf$, p)
+    End If
+
+    If Len(gRxBuf$) >= 3 Then
+      payloadLen = Asc(Mid$(gRxBuf$, 2, 1)) + 256 * Asc(Mid$(gRxBuf$, 3, 1))
+
+      If payloadLen <= 0 Or payloadLen > MAX_FRAME_LEN Then
+        ' Not a real header (e.g. a stray ">" in noise). Drop only this
+        ' start byte and rescan, keeping any good frame that follows.
+        gRxBuf$ = Mid$(gRxBuf$, 2)
+      ElseIf Len(gRxBuf$) >= payloadLen + 3 Then
+        ReadFrame$ = Mid$(gRxBuf$, 4, payloadLen)
+        gRxBuf$ = Mid$(gRxBuf$, payloadLen + 4)
+        Exit Function
+      End If
     End If
 
     If Timer - t0 > timeoutMs Then
+      ' A partial header or payload did not complete. Drop its start byte
+      ' so the next read resynchronises on whatever arrived after it.
+      If Left$(gRxBuf$, 1) = ">" Then gRxBuf$ = Mid$(gRxBuf$, 2)
       ReadFrame$ = ""
       Exit Function
     End If
   Loop
-
-  ' Read length low byte
-  t0 = Timer
-  Do While Loc(#1) < 1
-    If Timer - t0 > timeoutMs Then
-      FlushInput
-      ReadFrame$ = ""
-      Exit Function
-    End If
-  Loop
-  b$ = Input$(1, #1)
-  lenLo = Asc(b$)
-
-  ' Read length high byte
-  t0 = Timer
-  Do While Loc(#1) < 1
-    If Timer - t0 > timeoutMs Then
-      FlushInput
-      ReadFrame$ = ""
-      Exit Function
-    End If
-  Loop
-  b$ = Input$(1, #1)
-  lenHi = Asc(b$)
-
-  payloadLen = lenLo + 256 * lenHi
-
-  ' Reject invalid lengths
-  If payloadLen <= 0 Or payloadLen > MAX_FRAME_LEN Then
-    ' Drain any bytes already buffered from the invalid frame.
-    FlushInput
-    ReadFrame$ = ""
-    Exit Function
-  End If
-
-  ' Wait until full payload is available
-  t0 = Timer
-  Do While Loc(#1) < payloadLen
-    If Timer - t0 > timeoutMs Then
-      FlushInput
-      ReadFrame$ = ""
-      Exit Function
-    End If
-  Loop
-
-  payload$ = Input$(payloadLen, #1)
-  ReadFrame$ = payload$
 End Function
 
 Sub ParseContactSilent(a$)

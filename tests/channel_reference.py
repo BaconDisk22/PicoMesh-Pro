@@ -1,10 +1,11 @@
 """Reference models for channel traffic and MMBasic-style UART reads.
 
 NOT an MMBasic runtime. ``UartReadModel`` mirrors Function ReadFrame$ in
-meshcore.bas more literally than uart_simulator.StreamDecoder: bytes that have
-not arrived when ReadFrame$ needs them are treated as a timeout, and every
-timeout or invalid length after a start byte calls FlushInput, which discards
-*everything* buffered, including later frames. Channel helpers mirror
+meshcore.bas: waiting UART bytes are moved into a 255-byte software buffer
+(gRxBuf$); bytes that have not arrived when ReadFrame$ needs them count as a
+timeout. An invalid length drops only the start byte and rescans, and a
+timeout on a partial frame drops only its start byte, so later frames survive
+(audit R10). Channel helpers mirror
 DoSendChannelMessage, ParseChannelMessageFrame, FindChannelNameByIndex$ and
 ReadRadioChannelAt. Source-anchor tests keep these in step with meshcore.bas.
 """
@@ -24,8 +25,9 @@ def u32le(value: int) -> bytes:
 def async_frame(code: int = 0x88) -> bytes:
     return bytes([code, 0])
 
-MAX_FRAME_LEN = 1024
 MAX_STRING_LEN = 255  # MMBasic string limit
+MAX_FRAME_LEN = MAX_STRING_LEN - 3  # whole frame fits in gRxBuf$
+UART_RX_BUFFER = 2048  # Open "COM2:115200,2048"
 MAX_SEND_PAYLOAD = MAX_STRING_LEN - 3  # SendFrame adds a 3-byte header
 RADIO_START = 0x3E  # '>'
 CMD_SEND_CHANNEL_MSG = 3
@@ -38,39 +40,54 @@ MAX_CHANNELS = 8
 
 
 class UartReadModel:
+    """Mirror of FillRxBuf + ReadFrame$. ``uart`` is the hardware receive
+    buffer; ``rx`` is gRxBuf$. All bytes in ``uart`` count as already arrived."""
+
     def __init__(self):
-        self.buffer = bytearray()
-        self.flushes = 0
+        self.uart = bytearray()
+        self.rx = bytearray()
+        self.overflowed = 0
+
+    @property
+    def buffer(self) -> bytes:
+        return bytes(self.rx + self.uart)
 
     def arrive(self, data: bytes):
-        self.buffer.extend(data)
+        room = UART_RX_BUFFER - len(self.uart)
+        self.uart.extend(data[:max(room, 0)])
+        self.overflowed += max(len(data) - max(room, 0), 0)
 
-    def _flush(self):
-        self.buffer.clear()
-        self.flushes += 1
+    def flush_input(self):
+        self.rx.clear()
+        self.uart.clear()
+
+    def _fill(self):
+        n = min(len(self.uart), MAX_STRING_LEN - len(self.rx))
+        if n > 0:
+            self.rx.extend(self.uart[:n])
+            del self.uart[:n]
 
     def read_frame(self) -> Optional[bytes]:
-        # Hunt for the start byte; bytes before it are consumed and dropped.
-        while self.buffer:
-            b = self.buffer.pop(0)
-            if b == RADIO_START:
-                break
-        else:
-            return None  # timeout while hunting: no flush in MMBasic
-        if len(self.buffer) < 2:
-            self._flush()  # timeout waiting for a length byte
-            return None
-        size = self.buffer[0] | (self.buffer[1] << 8)
-        del self.buffer[:2]
-        if size <= 0 or size > MAX_FRAME_LEN:
-            self._flush()
-            return None
-        if len(self.buffer) < size:
-            self._flush()  # payload did not complete within the timeout
-            return None
-        payload = bytes(self.buffer[:size])
-        del self.buffer[:size]
-        return payload
+        while True:
+            before = (bytes(self.rx), len(self.uart))
+            self._fill()
+            p = self.rx.find(bytes([RADIO_START]))
+            if p < 0:
+                self.rx.clear()
+            elif p > 0:
+                del self.rx[:p]
+            if len(self.rx) >= 3:
+                size = self.rx[1] | (self.rx[2] << 8)
+                if size <= 0 or size > MAX_FRAME_LEN:
+                    del self.rx[:1]  # bad header: drop the start byte, rescan
+                elif len(self.rx) >= size + 3:
+                    payload = bytes(self.rx[3:3 + size])
+                    del self.rx[:3 + size]
+                    return payload
+            if (bytes(self.rx), len(self.uart)) == before:  # no progress: timeout
+                if self.rx[:1] == bytes([RADIO_START]):
+                    del self.rx[:1]
+                return None
 
 
 def frame(payload: bytes) -> bytes:

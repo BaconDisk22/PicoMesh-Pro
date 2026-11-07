@@ -5,7 +5,7 @@ from uart_simulator import StreamDecoder, encode, MAX_FRAME_LEN
 
 class UARTSimulatorTests(unittest.TestCase):
     def test_round_trip_both_directions(self):
-        for payload in (b"\x01", b"\x16\x0a", bytes(range(256)), b"x" * MAX_FRAME_LEN):
+        for payload in (b"\x01", b"\x16\x0a", bytes(range(200)), b"x" * MAX_FRAME_LEN):
             for radio_to_host in (True, False):
                 decoder = StreamDecoder(radio_to_host=radio_to_host)
                 self.assertEqual(decoder.feed(encode(payload, radio_to_host=radio_to_host)), [payload])
@@ -24,6 +24,10 @@ class UARTSimulatorTests(unittest.TestCase):
 
     def test_garbage_before_header(self):
         self.assertEqual(StreamDecoder().feed(b"garbage" + encode(b"\x01")), [b"\x01"])
+
+    def test_bad_header_followed_by_good_frame_in_one_chunk(self):
+        for bad in (b">\x00\x00", b">\x01\x04"):
+            self.assertEqual(StreamDecoder().feed(bad + encode(b"\x06")), [b"\x06"])
 
     def test_reject_zero_and_oversized_lengths(self):
         for bad in (b">\x00\x00", b">\x01\x04"):
