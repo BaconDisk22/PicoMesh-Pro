@@ -4,7 +4,7 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 
 ## Candidate identity
 
-- Candidate commit SHA (CI-verified baseline): `13dc8221ce0edc47622d0777fb5d51896d69ad86` (reverify if candidate changes)
+- Candidate commit SHA (CI-verified baseline): `2065f65c1d3c3aaa02f584f46efc0401e6f4fc2d` (reverify if candidate changes)
 - Date / tester: **NOT RECORDED**
 - PicoMite/PicoCalc model and firmware: **NOT RECORDED**
 - MeshCore companion model and firmware: **NOT RECORDED**
@@ -12,11 +12,12 @@ Use this form for the exact commit proposed for `v0.1.0-rc.1`. A green source-le
 
 ## Automated checks
 
-- GitHub Actions run URL: https://github.com/BaconDisk22/PicoMesh-Pro/actions/runs/41743741668
-- Commit SHA shown in run artifact metadata: `13dc8221ce0edc47622d0777fb5d51896d69ad86` (`main`)
+- GitHub Actions run URL: https://github.com/TheLogsAreScreaming/PicoMesh-Pro/actions/runs/41754015177 (`workflow_dispatch` on `main`)
+- Commit SHA shown in run metadata: `2065f65c1d3c3aaa02f584f46efc0401e6f4fc2d` (`main`, merge of #75)
 - Job conclusion: **SUCCESS** (`source-regressions`; all reported steps succeeded)
 - Test suite: `python -m unittest discover -s tests -v` (source-level checks only)
-- Test log artifact: `source-test-results` (artifact ID `13281249786`, uploaded successfully; log independently reviewed: 49 tests, 0 failures, 0 errors, `OK`)
+- Test log artifact: `source-test-results` (artifact ID `13287248377`, downloaded and reviewed 2026-11-06: 56 tests, 0 failures, 0 errors, `OK`; 49 prior checks + 7 UART simulator tests from #75)
+- Superseded baseline: run 41743741668 at `13dc8221ce0edc47622d0777fb5d51896d69ad86` (49 tests, `OK`)
 - Failures and follow-up issues: **NONE REPORTED BY JOB** (hardware issues not assessed)
 
 ## Hardware checks
