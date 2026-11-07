@@ -25,7 +25,7 @@ We need volunteers with a PicoMite/PicoCalc and a compatible MeshCore UART compa
 
 ## How to report
 
-Open a GitHub issue with the title `Hardware test: <board> / <companion> / <short outcome>`. Include:
+Open a [**Hardware test report** issue](https://github.com/TheLogsAreScreaming/PicoMesh-Pro/issues/new?template=hardware-test.yml). The form uses the title `Hardware test: <board> / <companion> / <short outcome>` and asks for:
 - Source commit SHA and exact firmware versions
 - PASS / FAIL / NOT TESTED per scenario
 - Steps to reproduce and expected vs observed behavior
